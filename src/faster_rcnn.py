@@ -107,7 +107,7 @@ numclass = len(classes)
 def get_labels_from_xml(xml_file, numclass = numclass):
     '''
     Input : 1 xml file
-    Get class label, get box coordinates.
+    (Get class label, get box coordinates)
     Because images are resized to 224x224, coordinates also need to be resized.
     Output: Existing class label, ground truth box coordinates
     '''
@@ -183,25 +183,23 @@ def generate_anchors(rpn_kernel_size=rpn_kernel_size, subsampled_ratio=subsample
         for size in anchor_sizes:
             
             for a_ratio in anchor_aspect_ratio:
-                # [x,y,w,h]
+                # [x, y, w, h]
                 anchor_info = [anchor_center_on_image[0], anchor_center_on_image[1], size*a_ratio[0], size*a_ratio[1]]
-
+                
                 # check whether anchor crosses the boundary of the image or not
                 if (anchor_info[0] - anchor_info[2]/2 < 0 or anchor_info[0] + anchor_info[2]/2 > image_width or 
                                         anchor_info[1] - anchor_info[3]/2 < 0 or anchor_info[1] + anchor_info[3]/2 > image_height) :
-
                     anchor_booleans.append([0.0]) # if anchor crosses boundary, anchor_booleans = 0
-
                 else:
-
                     anchor_booleans.append([1.0])
 
                 list_of_anchors.append(anchor_info)
     
     return list_of_anchors, anchor_booleans
+anchors, anchor_booleans = generate_anchors()
 #%%
 def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, numclass=numclass,
-                    neg_anchor_thresh = neg_threshold, pos_anchor_thresh = pos_threshold):
+                    neg_threshold = neg_threshold, pos_threshold = pos_threshold):
     '''
     Input : classes, ground truth box (top-left, bottom-right), all of anchors, anchor booleans.
     Compute IoU to get positive, negative samples.
@@ -211,16 +209,15 @@ def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, n
     Output : anchor booleans (to know which anchor to ignore), objectness label, regression coordinate in one image
     '''
 
-    number_of_anchors = len(anchors) #Get the total number of anchors.
-
-    anchor_boolean_array   = np.reshape(np.asarray(anchor_booleans),(number_of_anchors, 1))
+    num_anchors = len(anchors) # Get the total number of anchors.
+    anchor_boolean  = np.reshape(np.asarray(anchor_booleans), (num_anchors, 1))
     
     # IoU is more than threshold or not.
-    objectness_label_array = np.zeros((number_of_anchors, 2), dtype=np.float32)
+    objectness = np.zeros((num_anchors, 2), dtype=np.float32)
     # delta(x, y, w, h)
-    box_regression_array   = np.zeros((number_of_anchors, 4), dtype=np.float32)
+    box_regression = np.zeros((num_anchors, 4), dtype=np.float32)
     # belongs to which object for every anchor
-    class_array            = np.zeros((number_of_anchors, numclass), dtype=np.float32)
+    class_array = np.zeros((num_anchors, numclass), dtype=np.float32)
     
     for j in range(ground_truth_boxes.shape[0]):
 
@@ -230,29 +227,27 @@ def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, n
         gt_box_btm_rght_x = ground_truth_boxes[j][2]
         gt_box_btm_rght_y = ground_truth_boxes[j][3]
 
-        #Calculate the area of the original bounding box.1 is added since the index starts from 0 not 1.
-        gt_box_area = (gt_box_btm_rght_x - gt_box_top_left_x + 1)*(gt_box_btm_rght_y - gt_box_top_left_y + 1)
-
+        # Calculate the area of the original bounding box
+        gt_box_area = (gt_box_btm_rght_x - gt_box_top_left_x + 1) * (gt_box_btm_rght_y - gt_box_top_left_y + 1)
     
-        for i in range(number_of_anchors):
+        for i in range(num_anchors):
 
             ######### Compute IoU #########
 
             # Check if the anchor should be ignored or not. If it is to be ignored, it crosses boundary of image.
-            if int(anchor_boolean_array[i][0]) == 0:
-
+            if int(anchor_boolean[i][0]) == 0:
                 continue
 
             anchor = anchors[i] #Select the i-th anchor [x,y,w,h]
 
-            #anchors are in [x,y,w,h] format, convert them to the [top-left-x, top-left-y, btm-right-x, btm-right-y]
+            # anchors are in [x,y,w,h] format, convert them to the [top-left-x, top-left-y, btm-right-x, btm-right-y]
             anchor_top_left_x = anchor[0] - anchor[2]/2
             anchor_top_left_y = anchor[1] - anchor[3]/2
             anchor_btm_rght_x = anchor[0] + anchor[2]/2
             anchor_btm_rght_y = anchor[1] + anchor[3]/2
 
             # Get the area of the bounding box.
-            anchor_box_area = (anchor_btm_rght_x - anchor_top_left_x + 1)*(anchor_btm_rght_y - anchor_top_left_y + 1)
+            anchor_box_area = (anchor_btm_rght_x - anchor_top_left_x + 1) * (anchor_btm_rght_y - anchor_top_left_y + 1)
 
             # Determine the intersection rectangle.
             int_rect_top_left_x = max(gt_box_top_left_x, anchor_top_left_x)
@@ -261,48 +256,44 @@ def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, n
             int_rect_btm_rght_y = min(gt_box_btm_rght_y, anchor_btm_rght_y)
 
             # if the boxes do not intersect, difference = 0
-            int_rect_area = max(0, int_rect_btm_rght_x - int_rect_top_left_x + 1)*max(0, int_rect_btm_rght_y - int_rect_top_left_y)
+            int_rect_area = max(0, int_rect_btm_rght_x - int_rect_top_left_x + 1) * max(0, int_rect_btm_rght_y - int_rect_top_left_y)
 
             # Calculate the IoU
             intersect_over_union = float(int_rect_area / (gt_box_area + anchor_box_area - int_rect_area))
             
-            # Positive
-            if intersect_over_union >= pos_anchor_thresh:
-
-                objectness_label_array[i][0] = 1.0 
-                objectness_label_array[i][1] = 0.0 
+            if intersect_over_union >= pos_threshold:
+                objectness[i][0] = 1.0 
+                objectness[i][1] = 0.0 
                 
-                #get the class label
-                class_label = class_labels[j]
-                class_array[i][int(class_label)] = 1.0 #Denote the label of the class in the array.
+                # get the class label
+                class_array[i][class_labels[j]] = 1.0 # Denote the label of the class in the array.
                 
-                #Get the ground-truth box's [x,y,w,h]
+                # Get the ground-truth box's [x,y,w,h]
                 gt_box_center_x = ground_truth_boxes[j][0] + ground_truth_boxes[j][2]/2
                 gt_box_center_y = ground_truth_boxes[j][1] + ground_truth_boxes[j][3]/2
                 gt_box_width    = ground_truth_boxes[j][2] - ground_truth_boxes[j][0]
                 gt_box_height   = ground_truth_boxes[j][3] - ground_truth_boxes[j][1]
 
-                #Regression loss / weight
+                # Regression loss / weight 
                 delta_x = (gt_box_center_x - anchor[0])/anchor[2]
                 delta_y = (gt_box_center_y - anchor[1])/anchor[3]
                 delta_w = math.log(gt_box_width/anchor[2])
                 delta_h = math.log(gt_box_height/anchor[3])
 
-                box_regression_array[i][0] = delta_x
-                box_regression_array[i][1] = delta_y
-                box_regression_array[i][2] = delta_w
-                box_regression_array[i][3] = delta_h
+                box_regression[i][0] = delta_x
+                box_regression[i][1] = delta_y
+                box_regression[i][2] = delta_w
+                box_regression[i][3] = delta_h
 
-            if intersect_over_union <= neg_anchor_thresh:
-                if int(objectness_label_array[i][0]) == 0:
-                    objectness_label_array[i][1] = 1.0
+            if intersect_over_union <= neg_threshold:
+                if int(objectness[i][0]) == 0:
+                    objectness[i][1] = 1.0
 
-            if intersect_over_union > neg_anchor_thresh and intersect_over_union < pos_anchor_thresh:
-                if int(objectness_label_array[i][0]) == 0 and int(objectness_label_array[i][1]) == 0:
-                    anchor_boolean_array[i][0] = 0.0 # ignore this anchor
+            if intersect_over_union > neg_threshold and intersect_over_union < pos_threshold:
+                if int(objectness[i][0]) == 0 and int(objectness[i][1]) == 0:
+                    anchor_boolean[i][0] = 0.0 # ignore this anchor
 
-
-    return anchor_boolean_array, objectness_label_array, box_regression_array, class_array
+    return anchor_boolean, objectness, box_regression, class_array
 #%%
 def anchor_sampling(anchor_booleans, objectness_label, anchor_sampling_amount=anchor_sampling_amount):
 
