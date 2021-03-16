@@ -16,6 +16,7 @@ import sys
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from tqdm import tqdm
 import cv2
 import xml.etree.ElementTree as Et
@@ -32,7 +33,9 @@ ANNOTATIONS_FOLDER = "Annotations"
 ann_root, ann_dir, ann_files = next(os.walk(os.path.join(dataset_path, ANNOTATIONS_FOLDER)))
 img_root, amg_dir, img_files = next(os.walk(os.path.join(dataset_path, IMAGE_FOLDER)))
 
-for xml_file in ann_files[:10]:
+total_images = len(img_files)
+
+for xml_file in ann_files[:3]:
 
     # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
     img_name = img_files[img_files.index(".".join([xml_file.split(".")[0], "jpg"]))]
@@ -82,7 +85,7 @@ anchor_aspect_ratio = [[1, 1],[1/math.sqrt(2), math.sqrt(2)],[math.sqrt(2), 1/ma
 num_anchors_in_box = len(anchor_sizes) * len(anchor_aspect_ratio)
 neg_threshold = 0.3
 pos_threshold = 0.7
-anchor_sampling_amount = 128        # 128 for each positive, negative sampling
+anchor_sampling_amount = 128 # 128 for each positive, negative sampling
 #%%
 '''
 Input : dataset's annotations
@@ -138,7 +141,7 @@ def get_labels_from_xml(xml_file, numclass = numclass):
         y_min = float((image_height / height) * y_min)
         x_max = float((image_width / width) * x_max)
         y_max = float((image_height / height) * y_max)
-        box_info = [x_min, y_min, x_max, y_max]       # [top-left, bottom-right]
+        box_info = [x_min, y_min, x_max, y_max] # [top-left, bottom-right]
         
         class_label.append(classdict.get(ebj_class))
         bbox_label.append(np.asarray(box_info, dtype='float32'))
@@ -185,7 +188,6 @@ def generate_anchors(rpn_kernel_size=rpn_kernel_size, subsampled_ratio=subsample
             for a_ratio in anchor_aspect_ratio:
                 # [x, y, w, h]
                 anchor_info = [anchor_center_on_image[0], anchor_center_on_image[1], size*a_ratio[0], size*a_ratio[1]]
-                
                 # check whether anchor crosses the boundary of the image or not
                 if (anchor_info[0] - anchor_info[2]/2 < 0 or anchor_info[0] + anchor_info[2]/2 > image_width or 
                                         anchor_info[1] - anchor_info[3]/2 < 0 or anchor_info[1] + anchor_info[3]/2 > image_height) :
@@ -198,7 +200,7 @@ def generate_anchors(rpn_kernel_size=rpn_kernel_size, subsampled_ratio=subsample
     return list_of_anchors, anchor_booleans
 anchors, anchor_booleans = generate_anchors()
 #%%
-def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, numclass=numclass,
+def generate_label(class_label, ground_truth_boxes, anchors, anchor_booleans, numclass=numclass,
                     neg_threshold = neg_threshold, pos_threshold = pos_threshold):
     '''
     Input : classes, ground truth box (top-left, bottom-right), all of anchors, anchor booleans.
@@ -238,7 +240,7 @@ def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, n
             if int(anchor_boolean[i][0]) == 0:
                 continue
 
-            anchor = anchors[i] #Select the i-th anchor [x,y,w,h]
+            anchor = anchors[i] # Select the i-th anchor [x,y,w,h]
 
             # anchors are in [x,y,w,h] format, convert them to the [top-left-x, top-left-y, btm-right-x, btm-right-y]
             anchor_top_left_x = anchor[0] - anchor[2]/2
@@ -266,7 +268,7 @@ def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, n
                 objectness[i][1] = 0.0 
                 
                 # get the class label
-                class_array[i][class_labels[j]] = 1.0 # Denote the label of the class in the array.
+                class_array[i][class_label[j]] = 1.0 # Denote the label of the class in the array.
                 
                 # Get the ground-truth box's [x,y,w,h]
                 gt_box_center_x = ground_truth_boxes[j][0] + ground_truth_boxes[j][2]/2
@@ -274,11 +276,11 @@ def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, n
                 gt_box_width    = ground_truth_boxes[j][2] - ground_truth_boxes[j][0]
                 gt_box_height   = ground_truth_boxes[j][3] - ground_truth_boxes[j][1]
 
-                # Regression loss / weight 
+                # true value for Regression
                 delta_x = (gt_box_center_x - anchor[0])/anchor[2]
                 delta_y = (gt_box_center_y - anchor[1])/anchor[3]
-                delta_w = math.log(gt_box_width/anchor[2])
-                delta_h = math.log(gt_box_height/anchor[3])
+                delta_w = math.log(gt_box_width / anchor[2])
+                delta_h = math.log(gt_box_height / anchor[3])
 
                 box_regression[i][0] = delta_x
                 box_regression[i][1] = delta_y
@@ -293,44 +295,44 @@ def generate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, n
                 if int(objectness[i][0]) == 0 and int(objectness[i][1]) == 0:
                     anchor_boolean[i][0] = 0.0 # ignore this anchor
 
-    return anchor_boolean, objectness, box_regression, class_array
-#%%
-def anchor_sampling(anchor_booleans, objectness_label, anchor_sampling_amount=anchor_sampling_amount):
+    return anchor_booleans, objectness, box_regression, class_array
 
+anchor_booleans2, objectness, box_regression, class_array = generate_label(class_label, bbox_label, anchors, anchor_booleans)
+#%%
+def anchor_sampling(anchor_booleans2, objectness, anchor_sampling_amount=anchor_sampling_amount):
     '''
     Input : anchor booleans and objectness label
     fixed amount of negative anchors and positive anchors for training. 
     If we use all the neg and pos anchors, model will overfit on the negative samples.
     Output: Updated anchor booleans. 
     '''
-
     positive_count = 0
     negative_count = 0
     
-    for i in range(objectness_label.shape[0]):
-        if int(objectness_label[i][0]) == 1: #If the anchor is positive
+    for i in range(objectness.shape[0]):
+        if int(objectness[i][0]) == 1: # If the anchor is positive
 
-            if positive_count > anchor_sampling_amount: #If the positive anchors are more than the threshold amount, set the anchor boolean to 0.
+            if positive_count > anchor_sampling_amount: # If the positive anchors are more than the threshold amount, set the anchor boolean to 0.
 
-                anchor_booleans[i][0] = 0.0
+                anchor_booleans2[i][0] = 0.0
 
             positive_count += 1
 
-        if int(objectness_label[i][1]) == 1: #If the anchor is negatively labelled.
+        if int(objectness[i][1]) == 1: # If the anchor is negatively labelled.
             if negative_count > anchor_sampling_amount: #If the negative anchors are more than the threshold amount, set the boolean to 0.
 
-                anchor_booleans[i][0] = 0.0
+                anchor_booleans2[i][0] = 0.0
 
             negative_count += 1
     
-    return anchor_booleans
+    return anchor_booleans2
 #%%
 def generate_dataset(first_index, last_index, anchors, anchor_booleans):
         '''
         Input : starting index and final index of the dataset to be generated.
         Output: Anchor booleans, Objectness Label and Regression Label in batches.
         '''
-        num_of_anchors = len(anchors)
+        numanchors = len(anchors)
         
         batch_anchor_booleans   = []
         batch_objectness_array  = []
@@ -339,14 +341,11 @@ def generate_dataset(first_index, last_index, anchors, anchor_booleans):
 
         for i in range(first_index, last_index):
 
-            #Get the true labels and the ground truth boxes [x,y,w,h] for every file.
+            # Get the true labels and the ground truth boxes [x,y,w,h] for every file.
             true_labels, ground_truth_boxes = get_labels_from_xml(ann_files[i])
 
             # generate_labels for specified batches
-            anchor_bools, objectness_label_array, box_regression_array, class_array = generate_label(true_labels, ground_truth_boxes, 
-                                                                                                        anchors, anchor_booleans)
-            #ggenerate_label(class_labels, ground_truth_boxes, anchors, anchor_booleans, num_class=num_of_class,
-            #        neg_anchor_thresh = neg_threshold, pos_anchor_thresh = pos_threshold)
+            anchor_bools, objectness_label_array, box_regression_array, class_array = generate_label(true_labels, ground_truth_boxes, anchors, anchor_booleans)
 
             # get the updated anchor bools based on the fixed number of sample
             anchor_bools = anchor_sampling(anchor_bools, objectness_label_array)
@@ -356,19 +355,18 @@ def generate_dataset(first_index, last_index, anchors, anchor_booleans):
             batch_regression_array.append(box_regression_array)
             batch_class_label_array.append(class_array)
 
-        batch_anchor_booleans   = np.reshape(np.asarray(batch_anchor_booleans), (-1,num_of_anchors))            # (1, 6084, 1) -> (1, 6084)
-        
+        batch_anchor_booleans   = np.reshape(np.asarray(batch_anchor_booleans), (-1, numanchors)) # (1, 6084, 1) -> (1, 6084)
         batch_objectness_array  = np.asarray(batch_objectness_array)
         batch_regression_array  = np.asarray(batch_regression_array)
         batch_class_label_array = np.asarray(batch_class_label_array)
 
         return (batch_anchor_booleans, batch_objectness_array, batch_regression_array, batch_class_label_array)
 #%%
-anchors, an_bools = generate_anchors() # We only need to generate the anchors and the anchor booleans once.
-num_of_anchors = len(anchors)
-a,b,c,d = generate_dataset(0, 1, anchors, an_bools)
+a,b,c,d = generate_dataset(0, 1, anchors, anchor_booleans2)
 a.shape
-print(a)
+b.shape
+c.shape
+d.shape
 #%%
 def read_images(first_index, last_index):
     '''
@@ -381,37 +379,119 @@ def read_images(first_index, last_index):
     for i in range(first_index, last_index):
         
         im = cv2.imread(os.path.join(img_root, img_files[i]))
-        im = cv2.resize(im, (image_height, image_width))/255
+        im = cv2.resize(im, (image_height, image_width)) / 255
         
         images_list.append(im)
     
     return np.asarray(images_list)
 #%%
+anchors, an_bools = generate_anchors() # We only need to generate the anchors and the anchor booleans once.
+numanchors = len(anchors)
+#%%
+'''
+modelling
+'''
+img_input = K.Input((image_height, image_width, image_depth))
+
+conv1 = K.layers.Conv2D(filters=64, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv1_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
+h = conv1_pool(conv1(img_input))
+
+conv2 = K.layers.Conv2D(filters=128, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv2_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
+h = conv2_pool(conv2(h)) 
+
+conv3 = K.layers.Conv2D(filters=256, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv3_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
+h = conv3_pool(conv3(h)) # feature map, 28x28x256
+
+conv_rpn = K.layers.Conv2D(filters=256, kernel_size=3, strides=(1, 1), padding='VALID', activation='relu')
+sliding_window = conv_rpn(h) # 26x26x512
+
+conv_cls = K.layers.Conv2D(filters=18, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
+conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
+
+cls_output = conv_cls(sliding_window) # 26x26x18
+reg_output = conv_reg(sliding_window) # 26x26x36
+
+cls_output = tf.reshape(cls_output, (-1, numanchors, 2)) # 6084x2
+reg_output = tf.reshape(reg_output, (-1, numanchors, 4)) # 6084x4
+
+# cls_logit = tf.nn.softmax(cls_output, axis=-1)
+
+model = K.models.Model(img_input, [cls_output, reg_output])
+model.summary()
+#%%
+'''
+loss function
+'''
+def smooth_L1(reg_pred, reg_true):
+    diff = reg_pred - reg_true
+    return tf.where(tf.math.abs(diff) < 1, 0.5 * tf.math.pow(diff, 2), diff-0.5)
+
+def loss_function(cls_pred, cls_true, reg_pred, reg_true):
+    # 평균 계산 어떻게?
+    cls_loss = tf.reduce_mean(tf.multiply(batch_anchor_booleans, 
+                                        tf.nn.softmax_cross_entropy_with_logits(cls_pred, cls_true)))
+
+    reg_loss = tf.reduce_mean(tf.multiply(tf.reduce_sum(batch_objectness_array, axis=-1), 
+                                        tf.reduce_sum(smooth_L1(reg_pred, reg_true), axis=-1)))
+
+    loss = cls_loss + lambda_ * reg_loss
+    return loss
+#%%
 '''
 training
 '''
 learning_rate = 1e-5
-epoch = 100
-batch_size = 10
+epochs = 100
+batch_size = 20
 decay_steps = 10000
 decay_rate = 0.99
-lambda_value = 10
+lambda_ = 10
 
-#TRAINING 
+optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
-for epoch_idx in range(epoch): #Each epoch.
+# TRAINING 
+for epoch in range(epochs): # Each epoch.
     
-    #Loop through the whole dataset in batches.
+    # Loop through the whole dataset in batches.
     for start_idx in tqdm(range(0, total_images, batch_size)):
         
         end_idx = start_idx + batch_size
         
-        if end_idx >= total_images : end_idx = total_images - 1 #In case the end index exceeded the dataset.
+        if end_idx >= total_images : end_idx = total_images - 1 # In case the end index exceeded the dataset.
             
-        images = read_images(start_idx, end_idx) #Read images.
+        images = read_images(start_idx, end_idx) # Read images.
         
-        #Get the labels needed.
-        batch_anchor_booleans, batch_objectness_array, batch_regression_array, _ = \
-                                                generate_dataset(start_idx,end_idx, anchors, an_bools)
-        print(batch_objectness_array.shape)
+        with tf.GradientTape() as tape:
+            # Get the labels needed.
+            batch_anchor_booleans, batch_objectness_array, batch_regression_array, _ = generate_dataset(start_idx,end_idx, anchors, an_bools)
+            
+            cls_result, reg_result = model(images)
+            
+            loss = loss_function(cls_result, batch_objectness_array, reg_result, batch_regression_array)
+        
+        grad = tape.gradient(loss, model.weights)
+        optimizer.apply_gradients(zip(grad, model.weights))
+        
+    print("Epoch:", epoch, ", TRAIN loss:", loss.numpy())
+    print('\n')
+#%%
+img_array = read_images(1, 2)
+anchor_prob, anchor_box = model(img_array)
+boxes = anchor_box[0]
+top_anchor = np.argsort(anchor_prob.numpy()[0][:, 0])[-5:]
+
+fig, ax = plt.subplots()
+ax.imshow(img_array[0])
+for j in top_anchor:
+    box = boxes.numpy()[j, :]
+    x = box[0] * anchors[j][2] + anchors[j][0]
+    y = box[1] * anchors[j][3] + anchors[j][1]
+    w = math.exp(box[2]) * anchors[j][2]
+    h = math.exp(box[3]) * anchors[j][3]
+    rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
+    ax.add_patch(rect)
+plt.show()
 #%%
