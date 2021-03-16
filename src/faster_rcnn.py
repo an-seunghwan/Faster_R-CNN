@@ -18,6 +18,7 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from tqdm import tqdm
+# !pip install opencv-python
 import cv2
 import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import Element, ElementTree
@@ -26,6 +27,7 @@ from PIL import ImageFont
 from PIL import ImageDraw
 #%%
 dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
+dataset_path = r'D:\VOCdevkit\VOC2007'
 
 IMAGE_FOLDER = "JPEGImages"
 ANNOTATIONS_FOLDER = "Annotations"
@@ -35,44 +37,44 @@ img_root, amg_dir, img_files = next(os.walk(os.path.join(dataset_path, IMAGE_FOL
 
 total_images = len(img_files)
 
-for xml_file in ann_files[:3]:
+# for xml_file in ann_files[:3]:
 
-    # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
-    img_name = img_files[img_files.index(".".join([xml_file.split(".")[0], "jpg"]))]
-    img_file = os.path.join(img_root, img_name)
-    image = Image.open(img_file)
-    print("Image size: ", np.array(image).shape)
-    image = image.convert("RGB")
-    draw = ImageDraw.Draw(image)
+#     # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
+#     img_name = img_files[img_files.index(".".join([xml_file.split(".")[0], "jpg"]))]
+#     img_file = os.path.join(img_root, img_name)
+#     image = Image.open(img_file)
+#     print("Image size: ", np.array(image).shape)
+#     image = image.convert("RGB")
+#     draw = ImageDraw.Draw(image)
 
-    xml = open(os.path.join(ann_root, xml_file), "r")
-    tree = Et.parse(xml)
-    root = tree.getroot()
+#     xml = open(os.path.join(ann_root, xml_file), "r")
+#     tree = Et.parse(xml)
+#     root = tree.getroot()
 
-    size = root.find("size")
+#     size = root.find("size")
 
-    width = size.find("width").text
-    height = size.find("height").text
-    channels = size.find("depth").text
+#     width = size.find("width").text
+#     height = size.find("height").text
+#     channels = size.find("depth").text
 
-    objects = root.findall("object")
+#     objects = root.findall("object")
 
-    for _object in objects:
-        name = _object.find("name").text
-        bndbox = _object.find("bndbox")
-        xmin = int(bndbox.find("xmin").text)
-        ymin = int(bndbox.find("ymin").text)
-        xmax = int(bndbox.find("xmax").text)
-        ymax = int(bndbox.find("ymax").text)
+#     for _object in objects:
+#         name = _object.find("name").text
+#         bndbox = _object.find("bndbox")
+#         xmin = int(bndbox.find("xmin").text)
+#         ymin = int(bndbox.find("ymin").text)
+#         xmax = int(bndbox.find("xmax").text)
+#         ymax = int(bndbox.find("ymax").text)
 
-        # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
-        draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
-        draw.text((xmin, ymin), name)
+#         # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
+#         draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
+#         draw.text((xmin, ymin), name)
 
-    plt.figure(figsize=(10,10))
-    plt.imshow(image)
-    plt.show()
-    plt.close()
+#     plt.figure(figsize=(10,10))
+#     plt.imshow(image)
+#     plt.show()
+#     plt.close()
 #%%
 # parameters
 image_height = 224
@@ -445,7 +447,7 @@ training
 '''
 learning_rate = 1e-5
 epochs = 100
-batch_size = 20
+batch_size = 1
 decay_steps = 10000
 decay_rate = 0.99
 lambda_ = 10
