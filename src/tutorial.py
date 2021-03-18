@@ -88,6 +88,7 @@ num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
 neg_threshold = 0.3
 pos_threshold = 0.7
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling
+test_len = 100
 #%%
 '''
 Input : dataset's annotations
@@ -506,15 +507,18 @@ lambda_ = 10
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
+train_len = len(img_files) - test_len
+
 # TRAINING 
 for epoch in range(epochs): # Each epoch.
     
     # Loop through the whole dataset in batches.
-    for start_idx in tqdm(range(0, len(img_files), batch_size)):
+    for start_idx in tqdm(range(0, train_len, batch_size)):
         
         end_idx = start_idx + batch_size
         
-        if end_idx >= len(img_files) : end_idx = len(img_files) - 1 # In case the end index exceeded the dataset.
+        if end_idx > train_len: # In case the end index exceeded the dataset.
+            end_idx = train_len
             
         images = tf.cast(read_images(start_idx, end_idx), tf.float32)
         
@@ -534,7 +538,7 @@ for epoch in range(epochs): # Each epoch.
 
 model.save('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/model.h5')
 #%%
-img_array = read_images(1, 2)
+img_array = read_images(train_len+1, train_len+2)
 anchor_prob, anchor_box = model(img_array)
 boxes = anchor_box[0]
 top_anchor = np.argsort(anchor_prob.numpy()[0][:, 0])[-5:]
