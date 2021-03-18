@@ -35,46 +35,48 @@ ANNOTATIONS_FOLDER = "Annotations"
 
 ann_root, _, ann_files = next(os.walk(os.path.join(dataset_path, ANNOTATIONS_FOLDER)))
 img_root, _, img_files = next(os.walk(os.path.join(dataset_path, IMAGE_FOLDER)))
+ann_files = sorted(ann_files)
+img_files = sorted(img_files)
 
 # example
-for f in ann_files[:3]:
+# for f in ann_files[:3]:
 
-    # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
-    img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
-    img_file = os.path.join(img_root, img_name)
-    image = Image.open(img_file)
-    print("Image size: ", np.array(image).shape)
-    image = image.convert("RGB")
-    draw = ImageDraw.Draw(image)
+#     # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
+#     img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
+#     img_file = os.path.join(img_root, img_name)
+#     image = Image.open(img_file)
+#     print("Image size: ", np.array(image).shape)
+#     image = image.convert("RGB")
+#     draw = ImageDraw.Draw(image)
 
-    xml = open(os.path.join(ann_root, f), "r")
-    tree = Et.parse(xml)
-    root = tree.getroot()
+#     xml = open(os.path.join(ann_root, f), "r")
+#     tree = Et.parse(xml)
+#     root = tree.getroot()
 
-    size = root.find("size")
+#     size = root.find("size")
 
-    width = size.find("width").text
-    height = size.find("height").text
-    channels = size.find("depth").text
+#     width = size.find("width").text
+#     height = size.find("height").text
+#     channels = size.find("depth").text
 
-    objects = root.findall("object")
+#     objects = root.findall("object")
 
-    for _object in objects:
-        name = _object.find("name").text
-        bndbox = _object.find("bndbox")
-        xmin = int(bndbox.find("xmin").text)
-        ymin = int(bndbox.find("ymin").text)
-        xmax = int(bndbox.find("xmax").text)
-        ymax = int(bndbox.find("ymax").text)
+#     for _object in objects:
+#         name = _object.find("name").text
+#         bndbox = _object.find("bndbox")
+#         xmin = int(bndbox.find("xmin").text)
+#         ymin = int(bndbox.find("ymin").text)
+#         xmax = int(bndbox.find("xmax").text)
+#         ymax = int(bndbox.find("ymax").text)
 
-        # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
-        draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
-        draw.text((xmin, ymin), name)
+#         # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
+#         draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
+#         draw.text((xmin, ymin), name)
 
-    plt.figure(figsize=(10,10))
-    plt.imshow(image)
-    plt.show()
-    plt.close()
+#     plt.figure(figsize=(10,10))
+#     plt.imshow(image)
+#     plt.show()
+#     plt.close()
 #%%
 # parameters
 image_height = 224
@@ -110,7 +112,7 @@ classes.sort()
 classdict = {c:i for i,c in enumerate(classes)}
 numclass = len(classes)
 #%%
-def get_labels_from_xml(xml_file, numclass = numclass):
+def get_labels_from_xml(xml_file):
     '''
     Input : 1 xml file
     (Get class label, get box coordinates)
@@ -132,7 +134,7 @@ def get_labels_from_xml(xml_file, numclass = numclass):
     objects = root.findall("object")
     
     for object_ in objects:
-        ebj_class = object_.find("name").text.lower()
+        obj_class = object_.find("name").text.lower()
         
         # Get bounding box coordinates
         x_min = float(object_.find('bndbox').find('xmin').text) # top left x-axis coordinate.
@@ -147,12 +149,12 @@ def get_labels_from_xml(xml_file, numclass = numclass):
         y_max = float((image_height / height) * y_max)
         box_info = [x_min, y_min, x_max, y_max] # [top-left, bottom-right]
         
-        class_label.append(classdict.get(ebj_class))
+        class_label.append(classdict.get(obj_class))
         bbox_label.append(np.asarray(box_info, dtype='float32'))
 
     return class_label, np.asarray(bbox_label)
 
-class_label, bbox_label = get_labels_from_xml(ann_files[0], numclass = numclass)
+class_label, bbox_label = get_labels_from_xml(ann_files[0])
 ground_truth_boxes = bbox_label
 print(class_label)
 print(bbox_label)
@@ -223,7 +225,8 @@ for box, b in zip(anchors[8*335:8*336], anchor_booleans[8*335:8*336]):
         _, _, w, h = box
         rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
         ax.add_patch(rect)
-plt.show()
+# plt.show()
+plt.close()
 #%%
 def generate_proposals(class_label, 
                         ground_truth_boxes, 
@@ -477,6 +480,8 @@ def smooth_L1(reg_pred, reg_true):
 
 diff = np.linspace(-2, 2, 100)
 plt.plot(diff, tf.where(tf.math.abs(diff) < 1, 0.5 * tf.math.pow(diff, 2), tf.math.abs(diff)-0.5))
+# plt.show()
+plt.close()
 
 def loss_function(cls_pred, cls_true, reg_pred, reg_true):
     # objective가 아니라, anchor boolean이 training의 기준
@@ -499,16 +504,18 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
 training
 '''
 learning_rate = 1e-5
-epochs = 100
+epochs = 20
 batch_size = 10
 decay_steps = 10000
 decay_rate = 0.99
-lambda_ = 10
+lambda_ = 100
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
+model.compile(loss=loss_function, optimizer=optimizer) # for save
 
 train_len = len(img_files) - test_len
-
+#%%
+'''GradientTape'''
 # TRAINING 
 for epoch in range(epochs): # Each epoch.
     
@@ -536,22 +543,41 @@ for epoch in range(epochs): # Each epoch.
     print("Epoch:", epoch, ", TRAIN loss:", loss.numpy())
     print('\n')
 
-model.save('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/model.h5')
+tf.saved_model.save(model, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
 #%%
-img_array = read_images(train_len+1, train_len+2)
-anchor_prob, anchor_box = model(img_array)
-boxes = anchor_box[0]
-top_anchor = np.argsort(anchor_prob.numpy()[0][:, 0])[-5:]
+imported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+
+assert tf.reduce_sum(model(images)[0] - imported(images)[0]) == 0
+assert tf.reduce_sum(model(images)[1] - imported(images)[1]) == 0
+#%%
+idx = 11
+true_class, true_box = get_labels_from_xml(ann_files[idx])
+abool, obj, reg, _ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
+img_array = read_images(idx, idx+1)
+anchor_prob, anchor_box = imported(tf.cast(img_array, tf.float32))
+boxes = anchor_box[0].numpy()[np.where(abool == 1.0)[1], :]
+anchor_prob_ = anchor_prob[0].numpy()[np.where(abool == 1.0)[1], :]
+topk = 10
+top_anchor = np.argsort(anchor_prob_[:, 0])[-topk:]
+anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
 
 fig, ax = plt.subplots()
 ax.imshow(img_array[0])
 for j in top_anchor:
-    box = boxes.numpy()[j, :]
-    x = box[0] * anchors[j][2] + anchors[j][0]
-    y = box[1] * anchors[j][3] + anchors[j][1]
-    w = math.exp(box[2]) * anchors[j][2]
-    h = math.exp(box[3]) * anchors[j][3]
-    rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
+    box = boxes[j, :]
+    x = box[0] * anchors_[j][2] + anchors_[j][0] - anchors_[j][2]/2
+    y = box[1] * anchors_[j][3] + anchors_[j][1] - anchors_[j][3]/2
+    w = math.exp(box[2]) * anchors_[j][2]
+    h = math.exp(box[3]) * anchors_[j][3]
+    rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='r', facecolor='none')
     ax.add_patch(rect)
-plt.show()
+for box in true_box:
+    x = box[0]
+    y = box[1]
+    w = box[2] - box[0]
+    h = box[3] - box[1]
+    rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='b', facecolor='none')
+    ax.add_patch(rect)
+# plt.show()
+plt.close()
 #%%
