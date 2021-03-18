@@ -504,14 +504,14 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
 training
 '''
 learning_rate = 1e-5
-epochs = 20
-batch_size = 10
+epochs = 100
+batch_size = 100
 decay_steps = 10000
 decay_rate = 0.99
-lambda_ = 100
+lambda_ = 10
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
-model.compile(loss=loss_function, optimizer=optimizer) # for save
+# model.compile(loss=loss_function, optimizer=optimizer) # for save
 
 train_len = len(img_files) - test_len
 #%%
@@ -547,6 +547,7 @@ tf.saved_model.save(model, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/res
 #%%
 imported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
 
+images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(model(images)[0] - imported(images)[0]) == 0
 assert tf.reduce_sum(model(images)[1] - imported(images)[1]) == 0
 #%%
