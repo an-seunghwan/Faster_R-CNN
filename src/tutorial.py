@@ -396,10 +396,15 @@ def generate_dataset(first_index, last_index, anchors, anchor_booleans):
             batch_regression.append(box_regression)
             batch_anchor_class.append(anchor_class)
 
-        batch_anchor_booleans = tf.reshape(tf.cast(batch_anchor_booleans, tf.float32), (-1, num_anchors)) # (1, 6084, 1) -> (1, 6084)
-        batch_objectness = tf.cast(batch_objectness, tf.float32)
-        batch_regression = tf.cast(batch_regression, tf.float32)
-        batch_anchor_class = tf.cast(batch_anchor_class, tf.float32)
+        # batch_anchor_booleans = tf.reshape(tf.cast(batch_anchor_booleans, tf.float32), (-1, num_anchors)) # (1, 6084, 1) -> (1, 6084)
+        # batch_objectness = tf.cast(batch_objectness, tf.float32)
+        # batch_regression = tf.cast(batch_regression, tf.float32)
+        # batch_anchor_class = tf.cast(batch_anchor_class, tf.float32)
+        
+        batch_anchor_booleans = np.reshape(np.asarray(batch_anchor_booleans), (-1, num_anchors)) # (1, 6084, 1) -> (1, 6084)
+        batch_objectness = np.asarray(batch_objectness)
+        batch_regression = np.asarray(batch_regression)
+        batch_anchor_class = np.asarray(batch_anchor_class)
 
         return (batch_anchor_booleans, batch_objectness, batch_regression, batch_anchor_class)
 #%%
@@ -511,12 +516,12 @@ for epoch in range(epochs): # Each epoch.
         
         if end_idx >= len(img_files) : end_idx = len(img_files) - 1 # In case the end index exceeded the dataset.
             
-        images = read_images(start_idx, end_idx) # Read images.
+        images = tf.cast(read_images(start_idx, end_idx), tf.float32)
         
-        # Get the labels needed.
         batch_anchor_booleans, batch_objectness, batch_regression, _ = generate_dataset(start_idx, end_idx, anchors, anchor_booleans)
         
         with tf.GradientTape() as tape:
+            
             cls_result, reg_result = model(images)
             
             loss = loss_function(cls_result, batch_objectness, reg_result, batch_regression)
@@ -526,6 +531,8 @@ for epoch in range(epochs): # Each epoch.
         
     print("Epoch:", epoch, ", TRAIN loss:", loss.numpy())
     print('\n')
+
+model.save('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/model.h5')
 #%%
 img_array = read_images(1, 2)
 anchor_prob, anchor_box = model(img_array)
