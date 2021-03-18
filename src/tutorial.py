@@ -27,8 +27,8 @@ from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
 #%%
-dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
-# dataset_path = r'D:\VOCdevkit\VOC2007'
+# dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
+dataset_path = r'D:\VOCdevkit\VOC2007'
 
 IMAGE_FOLDER = "JPEGImages"
 ANNOTATIONS_FOLDER = "Annotations"
@@ -543,9 +543,11 @@ for epoch in range(epochs): # Each epoch.
     print("Epoch:", epoch, ", TRAIN loss:", loss.numpy())
     print('\n')
 
-tf.saved_model.save(model, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+# tf.saved_model.save(model, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+tf.saved_model.save(model, r'D:\Faster_R-CNN\result')
 #%%
-imported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+# imported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+imported = tf.saved_model.load(r'D:\Faster_R-CNN\result')
 
 images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(model(images)[0] - imported(images)[0]) == 0
