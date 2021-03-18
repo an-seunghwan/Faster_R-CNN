@@ -393,19 +393,19 @@ modelling
 '''
 img_input = K.Input((image_height, image_width, image_depth))
 
-conv1 = K.layers.Conv2D(filters=64, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv1 = K.layers.Conv2D(filters=8, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
 conv1_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
 h = conv1_pool(conv1(img_input))
 
-conv2 = K.layers.Conv2D(filters=128, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv2 = K.layers.Conv2D(filters=16, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
 conv2_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
 h = conv2_pool(conv2(h)) 
 
-conv3 = K.layers.Conv2D(filters=256, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv3 = K.layers.Conv2D(filters=32, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
 conv3_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
 h = conv3_pool(conv3(h)) # feature map, 28x28x256
 
-conv_rpn = K.layers.Conv2D(filters=256, kernel_size=3, strides=(1, 1), padding='VALID', activation='relu')
+conv_rpn = K.layers.Conv2D(filters=64, kernel_size=3, strides=(1, 1), padding='VALID', activation='relu')
 sliding_window = conv_rpn(h) # 26x26x512
 
 conv_cls = K.layers.Conv2D(filters=18, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
