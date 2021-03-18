@@ -17,6 +17,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import random
 from tqdm import tqdm
 # !pip install opencv-python
 import cv2
@@ -35,6 +36,7 @@ ANNOTATIONS_FOLDER = "Annotations"
 ann_root, _, ann_files = next(os.walk(os.path.join(dataset_path, ANNOTATIONS_FOLDER)))
 img_root, _, img_files = next(os.walk(os.path.join(dataset_path, IMAGE_FOLDER)))
 
+# example
 for f in ann_files[:3]:
 
     # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
@@ -79,7 +81,7 @@ image_height = 224
 image_width  = 224
 image_depth  = 3 # RGB
 RPN_kernel_size = 3 # 3x3
-subsampling_ratio = 8 # Pooling 3 times
+subsampling_ratio = 8 # (2, 2) Max Pooling 3 times -> 1/8 of original image
 anchor_sizes = [32, 64, 128]     
 anchor_aspect_ratio = [[1, 1],[1/math.sqrt(2), math.sqrt(2)],[math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
@@ -93,9 +95,9 @@ Output : class label
 '''
 classes = []
 
-for xml_file in ann_files: 
+for f in ann_files: 
 
-    xml = open(os.path.join(ann_root, xml_file), "r")
+    xml = open(os.path.join(ann_root, f), "r")
     tree = Et.parse(xml)
     root = tree.getroot()
     objects = root.findall("object")
@@ -130,7 +132,8 @@ def get_labels_from_xml(xml_file, numclass = numclass):
     
     for object_ in objects:
         ebj_class = object_.find("name").text.lower()
-         # Get bounding box coordinates
+        
+        # Get bounding box coordinates
         x_min = float(object_.find('bndbox').find('xmin').text) # top left x-axis coordinate.
         x_max = float(object_.find('bndbox').find('xmax').text) # bottom right x-axis coordinate.
         y_min = float(object_.find('bndbox').find('ymin').text) # top left y-axis coordinate.
@@ -149,30 +152,36 @@ def get_labels_from_xml(xml_file, numclass = numclass):
     return class_label, np.asarray(bbox_label)
 
 class_label, bbox_label = get_labels_from_xml(ann_files[0], numclass = numclass)
+ground_truth_boxes = bbox_label
 print(class_label)
 print(bbox_label)
 #%%
-def generate_anchors(rpn_kernel_size=rpn_kernel_size, subsampled_ratio=subsampled_ratio,
-                     anchor_sizes=anchor_sizes, anchor_aspect_ratio=anchor_aspect_ratio):
+def generate_anchors(RPN_kernel_size=RPN_kernel_size, 
+                     subsampling_ratio=subsampling_ratio,
+                     anchor_sizes=anchor_sizes, 
+                     anchor_aspect_ratio=anchor_aspect_ratio):
     '''
     Input : subsample_ratio (= Pooled ratio)
     generate anchor in feature map. Then project it to original image.
     Output : list of anchors (x,y,w,h) and anchor_boolean (ignore anchor if value equals 0)
     '''
 
-    list_of_anchors = []
-    anchor_booleans = [] # This is to keep track of an anchor's status. Anchors that are out of boundary are meant to be ignored.
+    anchors = []
+    # This is to keep track of an anchor's status. Anchors that are out of boundary are meant to be ignored.
+    anchor_booleans = [] 
 
-    starting_center = divmod(rpn_kernel_size, 2)[0] # rpn kernel's starting center in feature map
-    
+    # RPN kernel's starting center in feature map
+    starting_center = divmod(RPN_kernel_size, 2)[0] # 3x3 kernel이므로 가장 왼쪽 위를 기준으로 (1, 1) 지점이 kernel의 center
     anchor_center = [starting_center - 1, starting_center] # -1 on the x-coor because the increment comes first in the while loop
     
-    subsampled_height = image_height / subsampled_ratio # = 28
-    subsampled_width = image_width / subsampled_ratio # = 28
-
+    # original image가 1/8로 축소된 경우의 image size 
+    # : feature map of sliding window = center points of anchors
+    subsampled_height = image_height / subsampling_ratio # = 28
+    subsampled_width = image_width / subsampling_ratio # = 28
+    
     while (anchor_center != [subsampled_width - (1 + starting_center), subsampled_height - (1 + starting_center)]):  # != [26, 26]
 
-        anchor_center[0] += 1 #Increment x-axis
+        anchor_center[0] += 1 # Increment x-axis (x를 기준으로 이동)
 
         # If sliding window reached last center, increase y-axis
         if anchor_center[0] > subsampled_width - (1 + starting_center):
@@ -180,67 +189,88 @@ def generate_anchors(rpn_kernel_size=rpn_kernel_size, subsampled_ratio=subsample
             anchor_center[0] = starting_center
 
         # anchors are referenced to the original image. 
-        # Therefore, multiply downsampling ratio to obtain input image's center 
-        anchor_center_on_image = [anchor_center[0] * subsampled_ratio, anchor_center[1] * subsampled_ratio]
+        # Therefore, multiply downsampling ratio to obtain input image(reference)'s center 
+        anchor_center_on_image = [anchor_center[0] * subsampling_ratio, anchor_center[1] * subsampling_ratio]
 
         for size in anchor_sizes:
-            
             for a_ratio in anchor_aspect_ratio:
+                
                 # [x, y, w, h]
-                anchor_info = [anchor_center_on_image[0], anchor_center_on_image[1], size*a_ratio[0], size*a_ratio[1]]
+                anchor_info = [anchor_center_on_image[0], anchor_center_on_image[1], size * a_ratio[0], size * a_ratio[1]]
+                
                 # check whether anchor crosses the boundary of the image or not
-                if (anchor_info[0] - anchor_info[2]/2 < 0 or anchor_info[0] + anchor_info[2]/2 > image_width or 
-                                        anchor_info[1] - anchor_info[3]/2 < 0 or anchor_info[1] + anchor_info[3]/2 > image_height) :
+                if (anchor_info[0] - anchor_info[2]/2 < 0 
+                    or anchor_info[0] + anchor_info[2]/2 > image_width 
+                    or anchor_info[1] - anchor_info[3]/2 < 0 
+                    or anchor_info[1] + anchor_info[3]/2 > image_height) :
                     anchor_booleans.append([0.0]) # if anchor crosses boundary, anchor_booleans = 0
                 else:
                     anchor_booleans.append([1.0])
 
-                list_of_anchors.append(anchor_info)
+                anchors.append(anchor_info)
     
-    return list_of_anchors, anchor_booleans
+    return anchors, anchor_booleans
 anchors, anchor_booleans = generate_anchors()
+
+ex_img = np.zeros((image_width, image_height))
+fig, ax = plt.subplots()
+ax.imshow(ex_img)
+for box, b in zip(anchors[8*335:8*336], anchor_booleans[8*335:8*336]):
+    if b:
+        x = box[0] - box[2]/2
+        y = box[1] - box[3]/2
+        _, _, w, h = box
+        rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
+        ax.add_patch(rect)
+plt.show()
 #%%
-def generate_label(class_label, ground_truth_boxes, anchors, anchor_booleans, numclass=numclass,
-                    neg_threshold = neg_threshold, pos_threshold = pos_threshold):
+def generate_proposals(class_label, 
+                        ground_truth_boxes, 
+                        anchors, 
+                        anchor_booleans, 
+                        numclass=numclass,
+                        neg_threshold = neg_threshold, 
+                        pos_threshold = pos_threshold):
     '''
     Input : classes, ground truth box (top-left, bottom-right), all of anchors, anchor booleans.
     Compute IoU to get positive, negative samples.
-    if IoU > 0.7, positive 
-        IoU < 0.3, negative
-        Otherwise, ignore
+    if IoU > 0.7: positive 
+        IoU < 0.3: negative
+        Otherwise: ignore
     Output : anchor booleans (to know which anchor to ignore), objectness label, regression coordinate in one image
     '''
 
     num_anchors = len(anchors) # Get the total number of anchors.
-    anchor_boolean  = np.reshape(np.asarray(anchor_booleans), (num_anchors, 1))
+    # updated anchor booleans
+    anchor_booleans_ = np.reshape(np.asarray(anchor_booleans), (num_anchors, 1)) 
     
     # IoU is more than threshold or not.
     objectness = np.zeros((num_anchors, 2), dtype=np.float32)
-    # delta(x, y, w, h)
+    # regression true values (x, y, w, h)
     box_regression = np.zeros((num_anchors, 4), dtype=np.float32)
     # belongs to which object for every anchor
-    class_array = np.zeros((num_anchors, numclass), dtype=np.float32)
+    anchor_class = np.zeros((num_anchors, numclass), dtype=np.float32)
     
     for j in range(ground_truth_boxes.shape[0]):
 
-        #Get the ground truth box's coordinates.
-        gt_box_top_left_x = ground_truth_boxes[j][0]
-        gt_box_top_left_y = ground_truth_boxes[j][1]
-        gt_box_btm_rght_x = ground_truth_boxes[j][2]
-        gt_box_btm_rght_y = ground_truth_boxes[j][3]
+        # Get the ground truth box's coordinates: [top-left-x, top-left-y, btm-right-x, btm-right-y] format
+        box_top_left_x = ground_truth_boxes[j][0]
+        box_top_left_y = ground_truth_boxes[j][1]
+        box_btm_rght_x = ground_truth_boxes[j][2]
+        box_btm_rght_y = ground_truth_boxes[j][3]
 
         # Calculate the area of the original bounding box
-        gt_box_area = (gt_box_btm_rght_x - gt_box_top_left_x + 1) * (gt_box_btm_rght_y - gt_box_top_left_y + 1)
+        box_area = (box_btm_rght_x - box_top_left_x + 1) * (box_btm_rght_y - box_top_left_y + 1)
     
         for i in range(num_anchors):
 
-            ######### Compute IoU #########
-
-            # Check if the anchor should be ignored or not. If it is to be ignored, it crosses boundary of image.
-            if int(anchor_boolean[i][0]) == 0:
+            '''Compute IoU'''
+            # Check if the anchor should be ignored or not. 
+            # If it is to be ignored, it crosses boundary of image.
+            if int(anchor_booleans[i][0]) == 0:
                 continue
 
-            anchor = anchors[i] # Select the i-th anchor [x,y,w,h]
+            anchor = anchors[i] # Select the i-th anchor [x, y, w, h]
 
             # anchors are in [x,y,w,h] format, convert them to the [top-left-x, top-left-y, btm-right-x, btm-right-y]
             anchor_top_left_x = anchor[0] - anchor[2]/2
@@ -248,58 +278,66 @@ def generate_label(class_label, ground_truth_boxes, anchors, anchor_booleans, nu
             anchor_btm_rght_x = anchor[0] + anchor[2]/2
             anchor_btm_rght_y = anchor[1] + anchor[3]/2
 
-            # Get the area of the bounding box.
-            anchor_box_area = (anchor_btm_rght_x - anchor_top_left_x + 1) * (anchor_btm_rght_y - anchor_top_left_y + 1)
+            # Get the area of the anchor box.
+            anchor_box_area = (anchor_btm_rght_x - anchor_top_left_x) * (anchor_btm_rght_y - anchor_top_left_y)
 
             # Determine the intersection rectangle.
-            int_rect_top_left_x = max(gt_box_top_left_x, anchor_top_left_x)
-            int_rect_top_left_y = max(gt_box_top_left_y, anchor_top_left_y)
-            int_rect_btm_rght_x = min(gt_box_btm_rght_x, anchor_btm_rght_x)
-            int_rect_btm_rght_y = min(gt_box_btm_rght_y, anchor_btm_rght_y)
+            inter_top_left_x = max(box_top_left_x, anchor_top_left_x)
+            inter_top_left_y = max(box_top_left_y, anchor_top_left_y)
+            inter_btm_rght_x = min(box_btm_rght_x, anchor_btm_rght_x)
+            inter_btm_rght_y = min(box_btm_rght_y, anchor_btm_rght_y)
 
             # if the boxes do not intersect, difference = 0
-            int_rect_area = max(0, int_rect_btm_rght_x - int_rect_top_left_x + 1) * max(0, int_rect_btm_rght_y - int_rect_top_left_y)
+            inter_area = max(0, inter_btm_rght_x - inter_top_left_x) * max(0, inter_btm_rght_y - inter_top_left_y)
 
             # Calculate the IoU
-            intersect_over_union = float(int_rect_area / (gt_box_area + anchor_box_area - int_rect_area))
+            intersect_over_union = float(inter_area / (box_area + anchor_box_area - inter_area))
             
+            '''Non-Maximum Suppression'''
+            # 모든 true object box에 대해 반복
+            
+            # 겹치는 true object box가 하나라도 있다면 object 유무를 반드시 1로 지정함
             if intersect_over_union >= pos_threshold:
                 objectness[i][0] = 1.0 
                 objectness[i][1] = 0.0 
                 
                 # get the class label
-                class_array[i][class_label[j]] = 1.0 # Denote the label of the class in the array.
+                anchor_class[i][class_label[j]] = 1.0 # Denote the label of the class in the array.
                 
                 # Get the ground-truth box's [x,y,w,h]
-                gt_box_center_x = ground_truth_boxes[j][0] + ground_truth_boxes[j][2]/2
-                gt_box_center_y = ground_truth_boxes[j][1] + ground_truth_boxes[j][3]/2
-                gt_box_width    = ground_truth_boxes[j][2] - ground_truth_boxes[j][0]
-                gt_box_height   = ground_truth_boxes[j][3] - ground_truth_boxes[j][1]
+                box_center_x = ground_truth_boxes[j][0] + ground_truth_boxes[j][2]/2
+                box_center_y = ground_truth_boxes[j][1] + ground_truth_boxes[j][3]/2
+                box_width    = ground_truth_boxes[j][2] - ground_truth_boxes[j][0]
+                box_height   = ground_truth_boxes[j][3] - ground_truth_boxes[j][1]
 
                 # true value for Regression
-                delta_x = (gt_box_center_x - anchor[0])/anchor[2]
-                delta_y = (gt_box_center_y - anchor[1])/anchor[3]
-                delta_w = math.log(gt_box_width / anchor[2])
-                delta_h = math.log(gt_box_height / anchor[3])
+                box_regression[i][0] = (box_center_x - anchor[0]) / anchor[2]
+                box_regression[i][1] = (box_center_y - anchor[1]) / anchor[3]
+                box_regression[i][2] = tf.math.log(box_width / anchor[2])
+                box_regression[i][3] = tf.math.log(box_height / anchor[3])
+                
+                anchor_booleans_[i][0] = 1.0
 
-                box_regression[i][0] = delta_x
-                box_regression[i][1] = delta_y
-                box_regression[i][2] = delta_w
-                box_regression[i][3] = delta_h
-
+            # 어떤 object box에 대해 겹치지 않더라도, 현재까지 비교한 모든 object box와 겹치지 않는 경우에만 0으로 지정
             if intersect_over_union <= neg_threshold:
                 if int(objectness[i][0]) == 0:
                     objectness[i][1] = 1.0
+                    anchor_booleans_[i][0] = 1.0
 
+            # 어떤 object box에 대해 애매하게 겹치고, 아직 objectness가 지정되지 않았다면 해당 anchor를 무시
             if intersect_over_union > neg_threshold and intersect_over_union < pos_threshold:
                 if int(objectness[i][0]) == 0 and int(objectness[i][1]) == 0:
-                    anchor_boolean[i][0] = 0.0 # ignore this anchor
+                    # ignore this anchor
+                    anchor_booleans_[i][0] = 0.0 
 
-    return anchor_booleans, objectness, box_regression, class_array
+    return anchor_booleans_, objectness, box_regression, anchor_class
 
-anchor_booleans2, objectness, box_regression, class_array = generate_label(class_label, bbox_label, anchors, anchor_booleans)
+anchor_booleans, objectness, box_regression, anchor_class = generate_proposals(class_label, bbox_label, anchors, anchor_booleans)
 #%%
-def anchor_sampling(anchor_booleans2, objectness, anchor_sampling_amount=anchor_sampling_amount):
+# permutation 순서를 고려하면 더 좋을 듯! (수정사항)
+def anchor_sampling(anchor_booleans, 
+                    objectness, 
+                    anchor_sampling_amount=anchor_sampling_amount):
     '''
     Input : anchor booleans and objectness label
     fixed amount of negative anchors and positive anchors for training. 
@@ -309,60 +347,63 @@ def anchor_sampling(anchor_booleans2, objectness, anchor_sampling_amount=anchor_
     positive_count = 0
     negative_count = 0
     
-    for i in range(objectness.shape[0]):
-        if int(objectness[i][0]) == 1: # If the anchor is positive
-
-            if positive_count > anchor_sampling_amount: # If the positive anchors are more than the threshold amount, set the anchor boolean to 0.
-
-                anchor_booleans2[i][0] = 0.0
-
-            positive_count += 1
-
-        if int(objectness[i][1]) == 1: # If the anchor is negatively labelled.
-            if negative_count > anchor_sampling_amount: #If the negative anchors are more than the threshold amount, set the boolean to 0.
-
-                anchor_booleans2[i][0] = 0.0
-
-            negative_count += 1
+    objectness_ = objectness
+    # objectness_ = objectness[np.random.permutation(objectness.shape[0])]
     
-    return anchor_booleans2
+    for i in range(objectness_.shape[0]):
+        if int(objectness_[i][0]) == 1: # If the anchor is positive
+            positive_count += 1
+            # If the positive anchors are more than the threshold amount, set the anchor boolean to 0.  
+            if positive_count > anchor_sampling_amount: 
+                anchor_booleans[i][0] = 0.0
+        
+        if int(objectness_[i][1]) == 1: # If the anchor is negative
+            negative_count += 1
+            # If the negative anchors are more than the threshold amount, set the anchor boolean to 0.
+            if negative_count > anchor_sampling_amount: 
+                anchor_booleans[i][0] = 0.0
+    
+    return anchor_booleans
+
+anchor_booleans = anchor_sampling(anchor_booleans, objectness)
+np.sum(objectness[np.where(anchor_booleans == 1.0)[0]], axis=0)
 #%%
 def generate_dataset(first_index, last_index, anchors, anchor_booleans):
         '''
         Input : starting index and final index of the dataset to be generated.
         Output: Anchor booleans, Objectness Label and Regression Label in batches.
         '''
-        numanchors = len(anchors)
+        num_anchors = len(anchors)
         
-        batch_anchor_booleans   = []
-        batch_objectness_array  = []
-        batch_regression_array  = []
-        batch_class_label_array = []
+        batch_anchor_booleans = []
+        batch_objectness = []
+        batch_regression = []
+        batch_anchor_class = []
 
         for i in range(first_index, last_index):
 
-            # Get the true labels and the ground truth boxes [x,y,w,h] for every file.
+            # Get the true labels and the ground truth boxes [x,y,w,h] for every file in batch.
             true_labels, ground_truth_boxes = get_labels_from_xml(ann_files[i])
 
-            # generate_labels for specified batches
-            anchor_bools, objectness_label_array, box_regression_array, class_array = generate_label(true_labels, ground_truth_boxes, anchors, anchor_booleans)
+            # generate_proposals for specified batches
+            anchor_booleans, objectness, box_regression, anchor_class = generate_proposals(true_labels, ground_truth_boxes, anchors, anchor_booleans)
 
             # get the updated anchor bools based on the fixed number of sample
-            anchor_bools = anchor_sampling(anchor_bools, objectness_label_array)
+            anchor_booleans = anchor_sampling(anchor_booleans, objectness)
             
-            batch_anchor_booleans.append(anchor_bools)
-            batch_objectness_array.append(objectness_label_array)
-            batch_regression_array.append(box_regression_array)
-            batch_class_label_array.append(class_array)
+            batch_anchor_booleans.append(anchor_booleans)
+            batch_objectness.append(objectness)
+            batch_regression.append(box_regression)
+            batch_anchor_class.append(anchor_class)
 
-        batch_anchor_booleans   = np.reshape(np.asarray(batch_anchor_booleans), (-1, numanchors)) # (1, 6084, 1) -> (1, 6084)
-        batch_objectness_array  = np.asarray(batch_objectness_array)
-        batch_regression_array  = np.asarray(batch_regression_array)
-        batch_class_label_array = np.asarray(batch_class_label_array)
+        batch_anchor_booleans = tf.reshape(tf.cast(batch_anchor_booleans, tf.float32), (-1, num_anchors)) # (1, 6084, 1) -> (1, 6084)
+        batch_objectness = tf.cast(batch_objectness, tf.float32)
+        batch_regression = tf.cast(batch_regression, tf.float32)
+        batch_anchor_class = tf.cast(batch_anchor_class, tf.float32)
 
-        return (batch_anchor_booleans, batch_objectness_array, batch_regression_array, batch_class_label_array)
+        return (batch_anchor_booleans, batch_objectness, batch_regression, batch_anchor_class)
 #%%
-a,b,c,d = generate_dataset(0, 1, anchors, anchor_booleans2)
+a,b,c,d = generate_dataset(0, 1, anchors, anchor_booleans)
 a.shape
 b.shape
 c.shape
@@ -379,14 +420,13 @@ def read_images(first_index, last_index):
     for i in range(first_index, last_index):
         
         im = cv2.imread(os.path.join(img_root, img_files[i]))
-        im = cv2.resize(im, (image_height, image_width)) / 255
-        
+        im = cv2.resize(im, (image_height, image_width)) / 255 # scaling
         images_list.append(im)
     
     return np.asarray(images_list)
 #%%
-anchors, an_bools = generate_anchors() # We only need to generate the anchors and the anchor booleans once.
-numanchors = len(anchors)
+anchors, anchor_booleans = generate_anchors() # We only need to generate the anchors and the anchor booleans once.
+num_anchors = len(anchors)
 #%%
 '''
 modelling
@@ -414,8 +454,8 @@ conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='V
 cls_output = conv_cls(sliding_window) # 26x26x18
 reg_output = conv_reg(sliding_window) # 26x26x36
 
-cls_output = tf.reshape(cls_output, (-1, numanchors, 2)) # 6084x2
-reg_output = tf.reshape(reg_output, (-1, numanchors, 4)) # 6084x4
+cls_output = tf.reshape(cls_output, (-1, num_anchors, 2)) # 6084x2
+reg_output = tf.reshape(reg_output, (-1, num_anchors, 4)) # 6084x4
 
 # cls_logit = tf.nn.softmax(cls_output, axis=-1)
 
@@ -427,15 +467,24 @@ loss function
 '''
 def smooth_L1(reg_pred, reg_true):
     diff = reg_pred - reg_true
-    return tf.where(tf.math.abs(diff) < 1, 0.5 * tf.math.pow(diff, 2), diff-0.5)
+    return tf.where(tf.math.abs(diff) < 1, 0.5 * tf.math.pow(diff, 2), tf.math.abs(diff)-0.5)
+
+diff = np.linspace(-2, 2, 100)
+plt.plot(diff, tf.where(tf.math.abs(diff) < 1, 0.5 * tf.math.pow(diff, 2), tf.math.abs(diff)-0.5))
 
 def loss_function(cls_pred, cls_true, reg_pred, reg_true):
-    # 평균 계산 어떻게?
-    cls_loss = tf.reduce_mean(tf.multiply(batch_anchor_booleans, 
+    # objective가 아니라, anchor boolean이 training의 기준
+    # 왜냐하면, object가 존재하지 않더라도 object가 존재하지 않는다는 binary classification을 학습해야하기 때문
+    # 따라서, anchor의 사용 가능만을 이용해 loss를 계산
+    cls_loss = tf.reduce_sum(tf.multiply(batch_anchor_booleans, 
                                         tf.nn.softmax_cross_entropy_with_logits(cls_pred, cls_true)))
+    # normalizing: batch_size x (the number of positive and negative anchors)
+    cls_loss /= batch_size * (anchor_sampling_amount * 2) 
 
-    reg_loss = tf.reduce_mean(tf.multiply(tf.reduce_sum(batch_objectness_array, axis=-1), 
-                                        tf.reduce_sum(smooth_L1(reg_pred, reg_true), axis=-1)))
+    # positive objective만을 이용해 training
+    # 왜냐하면, box regression에는 실제로 object가 존재하는 경우에만 값이 존재
+    reg_loss = tf.reduce_mean(tf.multiply(cls_true[..., 0],  
+                                        tf.reduce_sum(smooth_L1(reg_pred, reg_true), axis=-1))) # anchor 개수를 이용해 normalizing
 
     loss = cls_loss + lambda_ * reg_loss
     return loss
@@ -445,7 +494,7 @@ training
 '''
 learning_rate = 1e-5
 epochs = 100
-batch_size = 1
+batch_size = 10
 decay_steps = 10000
 decay_rate = 0.99
 lambda_ = 10
@@ -456,21 +505,21 @@ optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 for epoch in range(epochs): # Each epoch.
     
     # Loop through the whole dataset in batches.
-    for start_idx in tqdm(range(0, total_images, batch_size)):
+    for start_idx in tqdm(range(0, len(img_files), batch_size)):
         
         end_idx = start_idx + batch_size
         
-        if end_idx >= total_images : end_idx = total_images - 1 # In case the end index exceeded the dataset.
+        if end_idx >= len(img_files) : end_idx = len(img_files) - 1 # In case the end index exceeded the dataset.
             
         images = read_images(start_idx, end_idx) # Read images.
         
+        # Get the labels needed.
+        batch_anchor_booleans, batch_objectness, batch_regression, _ = generate_dataset(start_idx, end_idx, anchors, anchor_booleans)
+        
         with tf.GradientTape() as tape:
-            # Get the labels needed.
-            batch_anchor_booleans, batch_objectness_array, batch_regression_array, _ = generate_dataset(start_idx,end_idx, anchors, an_bools)
-            
             cls_result, reg_result = model(images)
             
-            loss = loss_function(cls_result, batch_objectness_array, reg_result, batch_regression_array)
+            loss = loss_function(cls_result, batch_objectness, reg_result, batch_regression)
         
         grad = tape.gradient(loss, model.weights)
         optimizer.apply_gradients(zip(grad, model.weights))
