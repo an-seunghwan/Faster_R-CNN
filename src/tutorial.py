@@ -592,7 +592,7 @@ Cmodel = K.models.Model(img_input_, class_output)
 Cmodel.summary()
 #%%
 '''
-training
+training parameters
 '''
 learning_rate = 0.0001
 epochs = 10
@@ -603,7 +603,6 @@ lambda_ = 10
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 optimizer1 = tf.keras.optimizers.RMSprop(learning_rate)
-# model.compile(loss=loss_function, optimizer=optimizer) # for save
 
 train_len = len(img_files) - test_len
 #%%
@@ -637,10 +636,6 @@ for epoch in range(epochs): # Each epoch.
         
         print('RPN Epoch:', epoch, ', loss:', loss.numpy(), ', CLS loss:', cls_loss.numpy(), ', REG loss:', reg_loss.numpy())
         
-    print('\n')    
-    print("RPN Epoch:", epoch, ", TRAIN loss:", loss.numpy())
-    print('\n')
-    
     '''Classification'''
     for start_idx in range(0, train_len, batch_size): 
         
@@ -666,12 +661,12 @@ for epoch in range(epochs): # Each epoch.
         
         print('Class Epoch:', epoch, ', loss:', loss.numpy())
         
-tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
-tf.saved_model.save(Cmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
+tf.saved_model.save(Cmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
 # tf.saved_model.save(model, r'D:\Faster_R-CNN\result')
 #%%
-RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
-Cimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
+Cimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
 # imported = tf.saved_model.load(r'D:\Faster_R-CNN\result')
 
 images = tf.cast(read_images(0, 1), tf.float32)
