@@ -581,6 +581,6 @@ for box in true_box:
     h = box[3] - box[1]
     rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='b', facecolor='none')
     ax.add_patch(rect)
-# plt.show()
+plt.show()
 plt.close()
 #%%
