@@ -27,8 +27,8 @@ from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
 #%%
-dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
-# dataset_path = r'D:\VOCdevkit\VOC2007'
+# dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
+dataset_path = r'D:\VOCdevkit\VOC2007'
 
 IMAGE_FOLDER = "JPEGImages"
 ANNOTATIONS_FOLDER = "Annotations"
@@ -660,15 +660,15 @@ for epoch in range(epochs): # Each epoch.
         
         print('Class Epoch:', epoch, ', loss:', loss.numpy())
         
-tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
-tf.saved_model.save(Cmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
-# tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN')
-# tf.saved_model.save(Cmodel, r'D:\Faster_R-CNN\result\C')
+# tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
+# tf.saved_model.save(Cmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
+tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN')
+tf.saved_model.save(Cmodel, r'D:\Faster_R-CNN\result\C')
 #%%
-RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
-Cimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
-# RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN')
-# Cimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\C')
+# RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
+# Cimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
+RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN')
+Cimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\C')
 
 images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
