@@ -513,9 +513,9 @@ def ROI_pooling(feature_map, rois, topk_anchor, anchors_, pooled_height, pooled_
     Applies ROI pooling to a single image and a single region of interest
     """
     
-    # take the maximum of each area and stack the result
+    # take the mean of each area and stack the result
     def pool_area(x): 
-        return tf.math.reduce_max(region[x[0]:x[2], x[1]:x[3], :], axis=[0, 1])
+        return tf.math.reduce_mean(region[x[0]:x[2], x[1]:x[3], :], axis=[0, 1])
 
     roi_pooled = []
     for roi, j in zip(rois, topk_anchor):
@@ -535,8 +535,8 @@ def ROI_pooling(feature_map, rois, topk_anchor, anchors_, pooled_height, pooled_
         # Divide the region into non overlapping areas
         region_width  = w_end - w_start
         region_height = h_end - h_start
-        w_step = tf.cast( region_width  / pooled_width , 'int32')
-        h_step = tf.cast( region_height / pooled_height, 'int32')
+        w_step = tf.cast(region_width / pooled_width , 'int32')
+        h_step = tf.cast(region_height / pooled_height, 'int32')
         
         areas = [[(i*w_step, 
                     j*h_step, 
@@ -555,6 +555,8 @@ def generate_ROI_pooling(images, batch_anchor_booleans, batch_anchor_class, anch
     Input : starting index and final index of the dataset to be generated.
     Output: ROI pooled feature map
     '''
+    topk = 100
+    
     batch_roi_pooled = []
     batch_class_true = []
 
@@ -578,20 +580,17 @@ def generate_ROI_pooling(images, batch_anchor_booleans, batch_anchor_class, anch
 Classifier modelling
 '''
 img_input_ = K.Input((pooled_width, pooled_height, image_depth))
+h_ = K.layers.Flatten()(img_input_)
 
-conv1_ = K.layers.Conv2D(filters=1, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
-conv1_pool_ = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
-h = conv1_pool_(conv1_(img_input_))
-
-h = K.layers.Flatten()(h)
-
-dense_ = K.layers.Dense(numclass, activation='linear')
-class_output = dense_(h)
+dense_ = K.layers.Dense(numclass, activation='softmax')
+class_output = dense_(h_)
 
 Cmodel = K.models.Model(img_input_, class_output)
 Cmodel.summary()
-
-SCC_loss = K.losses.SparseCategoricalCrossentropy(from_logits=True)
+#%%
+# CC_loss = K.losses.CategoricalCrossentropy(from_logits=True)
+def CC_loss(class_pred, class_true):
+    return - tf.reduce_mean(tf.multiply(class_true, tf.math.log(class_pred + 1e-20)))
 #%%
 '''
 training parameters
@@ -599,8 +598,6 @@ training parameters
 learning_rate = 0.0001
 epochs = 10
 batch_size = 50
-# decay_steps = 10000
-# decay_rate = 0.99
 lambda_ = 10
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
@@ -609,8 +606,6 @@ optimizer1 = tf.keras.optimizers.RMSprop(learning_rate)
 train_len = len(img_files) - test_len
 #%%
 '''Alternative training'''
-topk = 10
-
 for epoch in range(epochs): # Each epoch.
     
     '''RPN'''
@@ -658,7 +653,7 @@ for epoch in range(epochs): # Each epoch.
             
             obj_class = Cmodel(batch_roi_pooled)
             
-            loss = SCC_loss(obj_class, class_true)
+            loss = CC_loss(obj_class, class_true)
             
         grad = tape.gradient(loss, Cmodel.weights)
         optimizer1.apply_gradients(zip(grad, Cmodel.weights))
@@ -667,11 +662,13 @@ for epoch in range(epochs): # Each epoch.
         
 tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
 tf.saved_model.save(Cmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
-# tf.saved_model.save(model, r'D:\Faster_R-CNN\result')
+# tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN')
+# tf.saved_model.save(Cmodel, r'D:\Faster_R-CNN\result\C')
 #%%
 RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
 Cimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
-# imported = tf.saved_model.load(r'D:\Faster_R-CNN\result')
+# RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN')
+# Cimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\C')
 
 images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
