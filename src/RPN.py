@@ -509,12 +509,11 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
 training parameters
 '''
 learning_rate = 0.0001
-epochs = 10
+epochs = 20
 batch_size = 50
-lambda_ = 10
+lambda_ = 100
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
-optimizer1 = tf.keras.optimizers.RMSprop(learning_rate)
 
 train_len = len(img_files) - test_len
 #%%
@@ -546,21 +545,21 @@ for epoch in range(epochs): # Each epoch.
         
         print('RPN Epoch:', epoch, ', loss:', loss.numpy(), ', CLS loss:', cls_loss.numpy(), ', REG loss:', reg_loss.numpy())
         
-tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
-# tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN')
+# tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
+tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN_model')
 #%%
-RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
-# RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN')
+# RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
+RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN_model')
 
 images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
 assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
 #%%
-# idx = 10
+# idx = 1000
 # true_class, true_box = get_labels_from_xml(ann_files[idx])
 # abool, obj, reg, _ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
 # img_array = read_images(idx, idx+1)
-# anchor_prob, anchor_box = imported(tf.cast(img_array, tf.float32))
+# anchor_prob, anchor_box = RPNimported(tf.cast(img_array, tf.float32))
 # boxes = anchor_box[0].numpy()[np.where(abool == 1.0)[1], :]
 # anchor_prob_ = anchor_prob[0].numpy()[np.where(abool == 1.0)[1], :]
 # topk = 10
