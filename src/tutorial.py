@@ -27,8 +27,8 @@ from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
 #%%
-# dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
-dataset_path = r'D:\VOCdevkit\VOC2007'
+dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
+# dataset_path = r'D:\VOCdevkit\VOC2007'
 
 IMAGE_FOLDER = "JPEGImages"
 ANNOTATIONS_FOLDER = "Annotations"
@@ -439,7 +439,7 @@ anchors, anchor_booleans = generate_anchors() # We only need to generate the anc
 num_anchors = len(anchors)
 #%%
 '''
-modelling
+RPN modelling
 '''
 img_input = K.Input((image_height, image_width, image_depth))
 
@@ -469,8 +469,8 @@ reg_output = tf.reshape(reg_output, (-1, num_anchors, 4)) # 6084x4
 
 cls_output = tf.nn.softmax(cls_output, axis=-1)
 
-model = K.models.Model(img_input, [cls_output, reg_output])
-model.summary()
+RPNmodel = K.models.Model(img_input, [cls_output, reg_output])
+RPNmodel.summary()
 #%%
 '''
 loss function
@@ -505,6 +505,92 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
     loss = cls_loss + lambda_ * reg_loss
     return loss, cls_loss, reg_loss
 #%%
+pooled_width = 5
+pooled_height = 5
+    
+def ROI_pooling(feature_map, rois, topk_anchor, anchors_, pooled_height, pooled_width):
+    """ 
+    Applies ROI pooling to a single image and a single region of interest
+    """
+    
+    # take the maximum of each area and stack the result
+    def pool_area(x): 
+        return tf.math.reduce_max(region[x[0]:x[2], x[1]:x[3], :], axis=[0, 1])
+
+    roi_pooled = []
+    for roi, j in zip(rois, topk_anchor):
+        x = roi[0] * anchors_[j][2] + anchors_[j][0] # center x
+        y = roi[1] * anchors_[j][3] + anchors_[j][1] # center y
+        w = math.exp(roi[2]) * anchors_[j][2]
+        h = math.exp(roi[3]) * anchors_[j][3]    
+        
+        # 예측이 image boundary를 넘어가는 경우를 대비
+        w_start = tf.cast(max(0, x - w/2), 'int32')
+        h_start = tf.cast(max(0, y - h/2), 'int32')
+        w_end   = tf.cast(max(0, x + w/2), 'int32')
+        h_end   = tf.cast(max(0, y + h/2), 'int32')
+        
+        region = feature_map[w_start:w_end, h_start:h_end, :]
+    
+        # Divide the region into non overlapping areas
+        region_width  = w_end - w_start
+        region_height = h_end - h_start
+        w_step = tf.cast( region_width  / pooled_width , 'int32')
+        h_step = tf.cast( region_height / pooled_height, 'int32')
+        
+        areas = [[(i*w_step, 
+                    j*h_step, 
+                    (i+1)*w_step if i+1 < pooled_width else region_width, 
+                    (j+1)*h_step if j+1 < pooled_height else region_height
+                    ) 
+                    for i in range(pooled_width)] 
+                    for j in range(pooled_height)]
+    
+        roi_pooled.append(tf.stack([[pool_area(x) for x in row] for row in areas]))
+    
+    return tf.cast(roi_pooled, tf.float32)
+#%%
+def generate_ROI_pooling(images, batch_anchor_booleans, batch_anchor_class, anchors, cls_pred, reg_pred):
+    '''
+    Input : starting index and final index of the dataset to be generated.
+    Output: ROI pooled feature map
+    '''
+    batch_roi_pooled = []
+    batch_class_true = []
+
+    for i in range(batch_size):
+        
+        abool = np.where(batch_anchor_booleans[i] == 1.0)
+        anchors_ = [anchors[i] for i in abool[0]]
+        cls_ = cls_pred.numpy()[i][abool[0], :]
+        topk_anchor = np.argsort(cls_[:, 0])[-topk:]
+        reg_topk = reg_pred.numpy()[i][abool[0], :][topk_anchor]
+        class_ = batch_anchor_class[i][abool[0], :][topk_anchor]
+        feature_map = images[i]
+
+        batch_roi_pooled.append(ROI_pooling(feature_map, reg_topk, topk_anchor, anchors_, pooled_height, pooled_width))
+        batch_class_true.append(class_)
+
+    return (tf.reshape(tf.cast(batch_roi_pooled, tf.float32), (batch_size*topk, pooled_height, pooled_width, image_depth)), 
+            tf.reshape(tf.cast(batch_class_true, tf.float32), (batch_size*topk, numclass)))
+#%%
+'''
+Classifier modelling
+'''
+img_input_ = K.Input((pooled_width, pooled_height, image_depth))
+
+conv1_ = K.layers.Conv2D(filters=1, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv1_pool_ = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
+h = conv1_pool_(conv1_(img_input_))
+
+h = K.layers.Flatten()(h)
+
+dense_ = K.layers.Dense(numclass, activation='linear')
+class_output = dense_(h)
+
+Cmodel = K.models.Model(img_input_, class_output)
+Cmodel.summary()
+#%%
 '''
 training
 '''
@@ -516,14 +602,17 @@ batch_size = 50
 lambda_ = 10
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
+optimizer1 = tf.keras.optimizers.RMSprop(learning_rate)
 # model.compile(loss=loss_function, optimizer=optimizer) # for save
 
 train_len = len(img_files) - test_len
 #%%
-'''GradientTape'''
-# TRAINING 
+'''Alternative training'''
+topk = 10
+
 for epoch in range(epochs): # Each epoch.
     
+    '''RPN'''
     # Loop through the whole dataset in batches.
     # dataset suffle is needed (수정사항)
     for start_idx in range(0, train_len, batch_size): 
@@ -539,57 +628,84 @@ for epoch in range(epochs): # Each epoch.
         
         with tf.GradientTape() as tape:
             
-            cls_result, reg_result = model(images)
+            cls_result, reg_result = RPNmodel(images)
             
             loss, cls_loss, reg_loss = loss_function(cls_result, batch_objectness, reg_result, batch_regression)
         
-        grad = tape.gradient(loss, model.weights)
-        optimizer.apply_gradients(zip(grad, model.weights))
+        grad = tape.gradient(loss, RPNmodel.weights)
+        optimizer.apply_gradients(zip(grad, RPNmodel.weights))
         
-        print('Epoch:', epoch, ', loss:', loss.numpy(), ', CLS loss:', cls_loss.numpy(), ', REG loss:', reg_loss.numpy())
-    
+        print('RPN Epoch:', epoch, ', loss:', loss.numpy(), ', CLS loss:', cls_loss.numpy(), ', REG loss:', reg_loss.numpy())
+        
     print('\n')    
-    print("Epoch:", epoch, ", TRAIN loss:", loss.numpy())
+    print("RPN Epoch:", epoch, ", TRAIN loss:", loss.numpy())
     print('\n')
-
-# tf.saved_model.save(model, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
-tf.saved_model.save(model, r'D:\Faster_R-CNN\result')
+    
+    '''Classification'''
+    for start_idx in range(0, train_len, batch_size): 
+        
+        end_idx = start_idx + batch_size
+        
+        if end_idx > train_len: # In case the end index exceeded the dataset.
+            end_idx = train_len
+            
+        images = tf.cast(read_images(start_idx, end_idx), tf.float32)
+        
+        batch_anchor_booleans, batch_objectness, batch_regression, batch_anchor_class = generate_dataset(start_idx, end_idx, anchors, anchor_booleans)
+        
+        with tf.GradientTape() as tape:
+            
+            cls_result, reg_result = RPNmodel(images)
+            
+            batch_roi_pooled, class_true = generate_ROI_pooling(images, batch_anchor_booleans, batch_anchor_class, anchors, cls_result, reg_result)
+            
+            obj_class = Cmodel(batch_roi_pooled)
+            
+        grad = tape.gradient(loss, Cmodel.weights)
+        optimizer1.apply_gradients(zip(grad, Cmodel.weights))
+        
+        print('Class Epoch:', epoch, ', loss:', loss.numpy())
+        
+tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+tf.saved_model.save(Cmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+# tf.saved_model.save(model, r'D:\Faster_R-CNN\result')
 #%%
-# imported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
-imported = tf.saved_model.load(r'D:\Faster_R-CNN\result')
+RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+Cimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result')
+# imported = tf.saved_model.load(r'D:\Faster_R-CNN\result')
 
 images = tf.cast(read_images(0, 1), tf.float32)
-assert tf.reduce_sum(model(images)[0] - imported(images)[0]) == 0
-assert tf.reduce_sum(model(images)[1] - imported(images)[1]) == 0
+assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
+assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
 #%%
-idx = 3
-true_class, true_box = get_labels_from_xml(ann_files[idx])
-abool, obj, reg, _ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
-img_array = read_images(idx, idx+1)
-anchor_prob, anchor_box = imported(tf.cast(img_array, tf.float32))
-boxes = anchor_box[0].numpy()[np.where(abool == 1.0)[1], :]
-anchor_prob_ = anchor_prob[0].numpy()[np.where(abool == 1.0)[1], :]
-topk = 10
-top_anchor = np.argsort(anchor_prob_[:, 0])[-topk:]
-anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
+# idx = 10
+# true_class, true_box = get_labels_from_xml(ann_files[idx])
+# abool, obj, reg, _ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
+# img_array = read_images(idx, idx+1)
+# anchor_prob, anchor_box = imported(tf.cast(img_array, tf.float32))
+# boxes = anchor_box[0].numpy()[np.where(abool == 1.0)[1], :]
+# anchor_prob_ = anchor_prob[0].numpy()[np.where(abool == 1.0)[1], :]
+# topk = 10
+# top_anchor = np.argsort(anchor_prob_[:, 0])[-topk:]
+# anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
 
-fig, ax = plt.subplots(figsize=(10, 10))
-ax.imshow(img_array[0])
-for j in top_anchor:
-    box = boxes[j, :]
-    x = box[0] * anchors_[j][2] + anchors_[j][0] # center x
-    y = box[1] * anchors_[j][3] + anchors_[j][1] # center y
-    w = math.exp(box[2]) * anchors_[j][2]
-    h = math.exp(box[3]) * anchors_[j][3]
-    rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=2, edgecolor='r', facecolor='none')
-    ax.add_patch(rect)
-for box in true_box:
-    x = box[0]
-    y = box[1]
-    w = box[2] - box[0]
-    h = box[3] - box[1]
-    rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='orange', facecolor='none')
-    ax.add_patch(rect)
-plt.show()
-plt.close()
+# fig, ax = plt.subplots(figsize=(10, 10))
+# ax.imshow(img_array[0])
+# for j in top_anchor:
+#     box = boxes[j, :]
+#     x = box[0] * anchors_[j][2] + anchors_[j][0] # center x
+#     y = box[1] * anchors_[j][3] + anchors_[j][1] # center y
+#     w = math.exp(box[2]) * anchors_[j][2]
+#     h = math.exp(box[3]) * anchors_[j][3]
+#     rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=2, edgecolor='r', facecolor='none')
+#     ax.add_patch(rect)
+# for box in true_box:
+#     x = box[0]
+#     y = box[1]
+#     w = box[2] - box[0]
+#     h = box[3] - box[1]
+#     rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='orange', facecolor='none')
+#     ax.add_patch(rect)
+# plt.show()
+# plt.close()
 #%%
