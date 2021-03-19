@@ -27,8 +27,8 @@ from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
 #%%
-dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
-# dataset_path = r'D:\VOCdevkit\VOC2007'
+# dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
+dataset_path = r'D:\VOCdevkit\VOC2007'
 
 IMAGE_FOLDER = "JPEGImages"
 ANNOTATIONS_FOLDER = "Annotations"
