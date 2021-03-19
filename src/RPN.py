@@ -505,93 +505,6 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
     loss = cls_loss + lambda_ * reg_loss
     return loss, cls_loss, reg_loss
 #%%
-pooled_width = 5
-pooled_height = 5
-    
-def ROI_pooling(feature_map, rois, topk_anchor, anchors_, pooled_height, pooled_width):
-    """ 
-    Applies ROI pooling to a single image and a single region of interest
-    """
-    
-    # take the mean of each area and stack the result
-    def pool_area(x): 
-        return tf.math.reduce_mean(region[x[0]:x[2], x[1]:x[3], :], axis=[0, 1])
-
-    roi_pooled = []
-    for roi, j in zip(rois, topk_anchor):
-        x = roi[0] * anchors_[j][2] + anchors_[j][0] # center x
-        y = roi[1] * anchors_[j][3] + anchors_[j][1] # center y
-        w = math.exp(roi[2]) * anchors_[j][2]
-        h = math.exp(roi[3]) * anchors_[j][3]    
-        
-        # 예측이 image boundary를 넘어가는 경우를 대비
-        w_start = tf.cast(max(0, x - w/2), 'int32')
-        h_start = tf.cast(max(0, y - h/2), 'int32')
-        w_end   = tf.cast(max(0, x + w/2), 'int32')
-        h_end   = tf.cast(max(0, y + h/2), 'int32')
-        
-        region = feature_map[w_start:w_end, h_start:h_end, :]
-    
-        # Divide the region into non overlapping areas
-        region_width  = w_end - w_start
-        region_height = h_end - h_start
-        w_step = tf.cast(region_width / pooled_width , 'int32')
-        h_step = tf.cast(region_height / pooled_height, 'int32')
-        
-        areas = [[(i*w_step, 
-                    j*h_step, 
-                    (i+1)*w_step if i+1 < pooled_width else region_width, 
-                    (j+1)*h_step if j+1 < pooled_height else region_height
-                    ) 
-                    for i in range(pooled_width)] 
-                    for j in range(pooled_height)]
-    
-        roi_pooled.append(tf.stack([[pool_area(x) for x in row] for row in areas]))
-    
-    return tf.cast(roi_pooled, tf.float32)
-#%%
-def generate_ROI_pooling(images, batch_anchor_booleans, batch_anchor_class, anchors, cls_pred, reg_pred):
-    '''
-    Input : starting index and final index of the dataset to be generated.
-    Output: ROI pooled feature map
-    '''
-    topk = 100
-    
-    batch_roi_pooled = []
-    batch_class_true = []
-
-    for i in range(batch_size):
-        
-        abool = np.where(batch_anchor_booleans[i] == 1.0)
-        anchors_ = [anchors[i] for i in abool[0]]
-        cls_ = cls_pred.numpy()[i][abool[0], :]
-        topk_anchor = np.argsort(cls_[:, 0])[-topk:]
-        reg_topk = reg_pred.numpy()[i][abool[0], :][topk_anchor]
-        class_ = batch_anchor_class[i][abool[0], :][topk_anchor]
-        feature_map = images[i]
-
-        batch_roi_pooled.append(ROI_pooling(feature_map, reg_topk, topk_anchor, anchors_, pooled_height, pooled_width))
-        batch_class_true.append(class_)
-
-    return (tf.reshape(tf.cast(batch_roi_pooled, tf.float32), (batch_size*topk, pooled_height, pooled_width, image_depth)), 
-            tf.reshape(tf.cast(batch_class_true, tf.float32), (batch_size*topk, numclass)))
-#%%
-'''
-Classifier modelling
-'''
-img_input_ = K.Input((pooled_width, pooled_height, image_depth))
-h_ = K.layers.Flatten()(img_input_)
-
-dense_ = K.layers.Dense(numclass, activation='softmax')
-class_output = dense_(h_)
-
-Cmodel = K.models.Model(img_input_, class_output)
-Cmodel.summary()
-#%%
-# CC_loss = K.losses.CategoricalCrossentropy(from_logits=True)
-def CC_loss(class_pred, class_true):
-    return - tf.reduce_mean(tf.multiply(class_true, tf.math.log(class_pred + 1e-20)))
-#%%
 '''
 training parameters
 '''
@@ -605,7 +518,7 @@ optimizer1 = tf.keras.optimizers.RMSprop(learning_rate)
 
 train_len = len(img_files) - test_len
 #%%
-'''Alternative training'''
+'''training'''
 for epoch in range(epochs): # Each epoch.
     
     '''RPN'''
@@ -633,42 +546,11 @@ for epoch in range(epochs): # Each epoch.
         
         print('RPN Epoch:', epoch, ', loss:', loss.numpy(), ', CLS loss:', cls_loss.numpy(), ', REG loss:', reg_loss.numpy())
         
-    '''Classification'''
-    for start_idx in range(0, train_len, batch_size): 
-        
-        end_idx = start_idx + batch_size
-        
-        if end_idx > train_len: # In case the end index exceeded the dataset.
-            end_idx = train_len
-            
-        images = tf.cast(read_images(start_idx, end_idx), tf.float32)
-        
-        batch_anchor_booleans, batch_objectness, batch_regression, batch_anchor_class = generate_dataset(start_idx, end_idx, anchors, anchor_booleans)
-        
-        with tf.GradientTape() as tape:
-            
-            cls_result, reg_result = RPNmodel(images)
-            
-            batch_roi_pooled, class_true = generate_ROI_pooling(images, batch_anchor_booleans, batch_anchor_class, anchors, cls_result, reg_result)
-            
-            obj_class = Cmodel(batch_roi_pooled)
-            
-            loss = CC_loss(obj_class, class_true)
-            
-        grad = tape.gradient(loss, Cmodel.weights)
-        optimizer1.apply_gradients(zip(grad, Cmodel.weights))
-        
-        print('Class Epoch:', epoch, ', loss:', loss.numpy())
-        
-tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
-tf.saved_model.save(Cmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
+tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
 # tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN')
-# tf.saved_model.save(Cmodel, r'D:\Faster_R-CNN\result\C')
 #%%
-RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN')
-Cimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/C')
+RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
 # RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN')
-# Cimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\C')
 
 images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
