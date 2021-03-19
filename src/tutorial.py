@@ -590,6 +590,8 @@ class_output = dense_(h)
 
 Cmodel = K.models.Model(img_input_, class_output)
 Cmodel.summary()
+
+SCC_loss = K.losses.SparseCategoricalCrossentropy(from_logits=True)
 #%%
 '''
 training parameters
@@ -655,6 +657,8 @@ for epoch in range(epochs): # Each epoch.
             batch_roi_pooled, class_true = generate_ROI_pooling(images, batch_anchor_booleans, batch_anchor_class, anchors, cls_result, reg_result)
             
             obj_class = Cmodel(batch_roi_pooled)
+            
+            loss = SCC_loss(obj_class, class_true)
             
         grad = tape.gradient(loss, Cmodel.weights)
         optimizer1.apply_gradients(zip(grad, Cmodel.weights))
