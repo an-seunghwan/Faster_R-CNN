@@ -87,8 +87,8 @@ subsampling_ratio = 8 # (2, 2) Max Pooling 3 times -> 1/8 of original image
 anchor_sizes = [32, 64, 128]     
 anchor_aspect_ratio = [[1, 1],[1/math.sqrt(2), math.sqrt(2)],[math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
-neg_threshold = 0.25
-pos_threshold = 0.5
+neg_threshold = 0.3
+pos_threshold = 0.7
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling
 test_len = 100
 #%%
@@ -562,7 +562,7 @@ images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(model(images)[0] - imported(images)[0]) == 0
 assert tf.reduce_sum(model(images)[1] - imported(images)[1]) == 0
 #%%
-idx = 2
+idx = 3
 true_class, true_box = get_labels_from_xml(ann_files[idx])
 abool, obj, reg, _ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
 img_array = read_images(idx, idx+1)
@@ -573,7 +573,7 @@ topk = 10
 top_anchor = np.argsort(anchor_prob_[:, 0])[-topk:]
 anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(10, 10))
 ax.imshow(img_array[0])
 for j in top_anchor:
     box = boxes[j, :]
@@ -588,7 +588,7 @@ for box in true_box:
     y = box[1]
     w = box[2] - box[0]
     h = box[3] - box[1]
-    rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='b', facecolor='none')
+    rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='orange', facecolor='none')
     ax.add_patch(rect)
 plt.show()
 plt.close()
