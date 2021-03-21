@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import random
 from tqdm import tqdm
+from copy import deepcopy
 # !pip install opencv-python
 import cv2
 import xml.etree.ElementTree as Et
@@ -27,8 +28,8 @@ from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
 #%%
-# dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
-dataset_path = r'D:\VOCdevkit\VOC2007'
+dataset_path = '/Users/anseunghwan/Downloads/VOCdevkit/VOC2007'
+# dataset_path = r'D:\VOCdevkit\VOC2007'
 
 IMAGE_FOLDER = "JPEGImages"
 ANNOTATIONS_FOLDER = "Annotations"
@@ -84,11 +85,11 @@ image_width  = 224
 image_depth  = 3 # RGB
 RPN_kernel_size = 3 # 3x3
 subsampling_ratio = 8 # (2, 2) Max Pooling 3 times -> 1/8 of original image
-anchor_sizes = [32, 64, 128]     
+anchor_sizes = [32, 64, 128]
 anchor_aspect_ratio = [[1, 1],[1/math.sqrt(2), math.sqrt(2)],[math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
-neg_threshold = 0.2
-pos_threshold = 0.6
+neg_threshold = 0.3
+pos_threshold = 0.5
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling 
 test_len = 100
 #%%
@@ -218,14 +219,15 @@ def generate_anchors(RPN_kernel_size=RPN_kernel_size,
 # ex_img = np.zeros((image_width, image_height))
 # fig, ax = plt.subplots()
 # ax.imshow(ex_img)
-# for box, b in zip(anchors[8*335:8*336], anchor_booleans[8*335:8*336]):
-#     if b:
+# for box, b in zip(anchors[8*100:8*101], anchor_booleans[8*100:8*101]):
+# # for box, b in zip(anchors, anchor_booleans):
+#     if b == [1.0]:
 #         x = box[0] - box[2]/2
 #         y = box[1] - box[3]/2
 #         _, _, w, h = box
 #         rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
 #         ax.add_patch(rect)
-# # plt.show()
+# plt.show()
 # plt.close()
 #%%
 def generate_proposals(class_label, 
@@ -247,7 +249,7 @@ def generate_proposals(class_label,
     num_anchors = len(anchors) # Get the total number of anchors.
     # updated anchor booleans
     anchor_booleans = np.reshape(np.asarray(anchor_booleans), (num_anchors, 1)) 
-    anchor_booleans_ = anchor_booleans
+    anchor_booleans_ = deepcopy(anchor_booleans)
     
     # IoU is more than threshold or not.
     objectness = np.zeros((num_anchors, 2), dtype=np.float32)
@@ -265,7 +267,7 @@ def generate_proposals(class_label,
         box_btm_rght_y = ground_truth_boxes[j][3]
 
         # Calculate the area of the original bounding box
-        box_area = (box_btm_rght_x - box_top_left_x + 1) * (box_btm_rght_y - box_top_left_y + 1)
+        box_area = (box_btm_rght_x - box_top_left_x) * (box_btm_rght_y - box_top_left_y)
     
         for i in range(num_anchors):
 
@@ -532,7 +534,7 @@ for epoch in range(epochs): # Each epoch.
             
         images = tf.cast(read_images(start_idx, end_idx), tf.float32)
         
-        batch_anchor_booleans, batch_objectness, batch_regression, _ = generate_dataset(start_idx, end_idx, anchors, anchor_booleans)
+        batch_anchor_booleans, batch_objectness, batch_regression, batch_class = generate_dataset(start_idx, end_idx, anchors, anchor_booleans)
         
         with tf.GradientTape() as tape:
             
@@ -545,11 +547,11 @@ for epoch in range(epochs): # Each epoch.
         
         print('RPN Epoch:', epoch, ', loss:', loss.numpy(), ', CLS loss:', cls_loss.numpy(), ', REG loss:', reg_loss.numpy())
         
-# tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
-tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN_model')
+tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
+# tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN_model')
 #%%
-# RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
-RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN_model')
+RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
+# RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN_model')
 
 images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
