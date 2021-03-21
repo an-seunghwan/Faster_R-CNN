@@ -511,9 +511,9 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
 training parameters
 '''
 learning_rate = 0.0001
-epochs = 10
+epochs = 2
 batch_size = 50
-lambda_ = 1000
+lambda_ = 100
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
