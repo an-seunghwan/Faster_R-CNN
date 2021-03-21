@@ -88,7 +88,7 @@ subsampling_ratio = 8 # (2, 2) Max Pooling 3 times -> 1/8 of original image
 anchor_sizes = [32, 64, 128]
 anchor_aspect_ratio = [[1, 1],[1/math.sqrt(2), math.sqrt(2)],[math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
-neg_threshold = 0.3
+neg_threshold = 0.2
 pos_threshold = 0.5
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling 
 test_len = 100
@@ -445,20 +445,20 @@ RPN modelling
 '''
 img_input = K.Input((image_height, image_width, image_depth))
 
-conv1 = K.layers.Conv2D(filters=8, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv1 = K.layers.Conv2D(filters=16, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
 conv1_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
 h = conv1_pool(conv1(img_input))
 
-conv2 = K.layers.Conv2D(filters=16, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv2 = K.layers.Conv2D(filters=32, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
 conv2_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
 h = conv2_pool(conv2(h)) 
 
-conv3 = K.layers.Conv2D(filters=32, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
+conv3 = K.layers.Conv2D(filters=64, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
 conv3_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
-h = conv3_pool(conv3(h)) # feature map, 28x28x256
+h = conv3_pool(conv3(h)) # feature map, 28x28x32
 
-conv_rpn = K.layers.Conv2D(filters=64, kernel_size=3, strides=(1, 1), padding='VALID', activation='relu')
-sliding_window = conv_rpn(h) # 26x26x512
+conv_rpn = K.layers.Conv2D(filters=128, kernel_size=3, strides=(1, 1), padding='VALID', activation='relu')
+sliding_window = conv_rpn(h) # 26x26x128
 
 conv_cls = K.layers.Conv2D(filters=18, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
 conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
@@ -511,9 +511,9 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
 training parameters
 '''
 learning_rate = 0.0001
-epochs = 2
+epochs = 10
 batch_size = 50
-lambda_ = 100
+lambda_ = 10
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
@@ -557,7 +557,7 @@ images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
 assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
 #%%
-# idx = 10
+# idx = 6
 # true_class, true_box = get_labels_from_xml(ann_files[idx])
 # abool, obj, reg, _ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
 # img_array = read_images(idx, idx+1)
