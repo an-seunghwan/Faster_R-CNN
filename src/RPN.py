@@ -466,10 +466,9 @@ conv_rpn = K.layers.Conv2D(filters=128, kernel_size=3, strides=(1, 1), padding='
 sliding_window = conv_rpn(h) # 26x26x128
 
 conv_cls = K.layers.Conv2D(filters=18, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
-conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear',
-                           kernel_regularizer=K.regularizers.L1L2(l1=0, l2=0.1), bias_regularizer=K.regularizers.L1L2(l1=0, l2=0.1))
+conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
 
-cls_output = conv_cls(sliding_window) # 26x26x18, logits
+cls_output = conv_cls(sliding_window) # 26x26x18
 reg_output = conv_reg(sliding_window) # 26x26x36
 
 cls_output = tf.reshape(cls_output, (-1, num_anchors, 2)) # 6084x2
@@ -563,116 +562,116 @@ images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
 assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
 #%%
-# def compute_IoU(box1, box2, anchor1, anchor2):
-#     x = box1[0] * anchor1[2] + anchor1[0] 
-#     y = box1[1] * anchor1[3] + anchor1[1] 
-#     w = math.exp(box1[2]) * anchor1[2]
-#     h = math.exp(box1[3]) * anchor1[3]
-#     x1 = x - w/2
-#     x2 = x + w/2
-#     y1 = y - h/2
-#     y2 = y + h/2
+def compute_IoU(box1, box2, anchor1, anchor2):
+    x = box1[0] * anchor1[2] + anchor1[0] 
+    y = box1[1] * anchor1[3] + anchor1[1] 
+    w = math.exp(box1[2]) * anchor1[2]
+    h = math.exp(box1[3]) * anchor1[3]
+    x1 = x - w/2
+    x2 = x + w/2
+    y1 = y - h/2
+    y2 = y + h/2
     
-#     # image boundary를 넘어가는 경우 보정
-#     if x1 < 0: x1 = 0
-#     if x1 > image_width : x1 = image_width
-#     if x2 < 0: x2 = 0
-#     if x2 > image_width : x2 = image_width
-#     if y1 < 0: y1 = 0
-#     if y1 > image_height : y1 = image_height
-#     if y2 < 0: y2 = 0
-#     if y2 > image_width : y2 = image_height
+    # image boundary를 넘어가는 경우 보정
+    if x1 < 0: x1 = 0
+    if x1 > image_width : x1 = image_width
+    if x2 < 0: x2 = 0
+    if x2 > image_width : x2 = image_width
+    if y1 < 0: y1 = 0
+    if y1 > image_height : y1 = image_height
+    if y2 < 0: y2 = 0
+    if y2 > image_width : y2 = image_height
     
-#     x = box2[0] * anchor2[2] + anchor2[0] 
-#     y = box2[1] * anchor2[3] + anchor2[1] 
-#     w = math.exp(box2[2]) * anchor2[2]
-#     h = math.exp(box2[3]) * anchor2[3]
-#     x1_ = x - w/2
-#     x2_ = x + w/2
-#     y1_ = y - h/2
-#     y2_ = y + h/2
+    x = box2[0] * anchor2[2] + anchor2[0] 
+    y = box2[1] * anchor2[3] + anchor2[1] 
+    w = math.exp(box2[2]) * anchor2[2]
+    h = math.exp(box2[3]) * anchor2[3]
+    x1_ = x - w/2
+    x2_ = x + w/2
+    y1_ = y - h/2
+    y2_ = y + h/2
     
-#     # image boundary를 넘어가는 경우 보정
-#     if x1_ < 0: x1_ = 0
-#     if x1_ > image_width : x1_ = image_width
-#     if x2_ < 0: x2_ = 0
-#     if x2_ > image_width : x2_ = image_width
-#     if y1_ < 0: y1_ = 0
-#     if y1_ > image_height : y1_ = image_height
-#     if y2_ < 0: y2_ = 0
-#     if y2_ > image_width : y2_ = image_height
+    # image boundary를 넘어가는 경우 보정
+    if x1_ < 0: x1_ = 0
+    if x1_ > image_width : x1_ = image_width
+    if x2_ < 0: x2_ = 0
+    if x2_ > image_width : x2_ = image_width
+    if y1_ < 0: y1_ = 0
+    if y1_ > image_height : y1_ = image_height
+    if y2_ < 0: y2_ = 0
+    if y2_ > image_width : y2_ = image_height
     
-#     box1_area = (x2 - x1) * (y2 - y1)
+    box1_area = (x2 - x1) * (y2 - y1)
     
-#     box2_area = (x2_ - x1_) * (y2_ - y1_)
+    box2_area = (x2_ - x1_) * (y2_ - y1_)
     
-#     inter_top_left_x = max(x1, x1_)
-#     inter_top_left_y = max(y1, y1_)
-#     inter_btm_rght_x = min(x2, x2_)
-#     inter_btm_rght_y = min(y2, y2_)
+    inter_top_left_x = max(x1, x1_)
+    inter_top_left_y = max(y1, y1_)
+    inter_btm_rght_x = min(x2, x2_)
+    inter_btm_rght_y = min(y2, y2_)
     
-#     inter_area = max(0, inter_btm_rght_x - inter_top_left_x) * max(0, inter_btm_rght_y - inter_top_left_y)
+    inter_area = max(0, inter_btm_rght_x - inter_top_left_x) * max(0, inter_btm_rght_y - inter_top_left_y)
 
-#     return float(inter_area / (box1_area + box2_area - inter_area))
-# #%%
-# '''Non-maximum Suppression'''
-# idx = 25
-# true_class, true_box = get_labels_from_xml(ann_files[idx])
-# abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
-# img_array = read_images(idx, idx+1)
-# anchor_prob, anchor_box = RPNimported(tf.cast(img_array, tf.float32))
-# anchor_prob = anchor_prob.numpy()[0][np.where(abool == 1.0)[1]]
-# anchor_box = anchor_box.numpy()[0][np.where(abool == 1.0)[1]]
-# anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
+    return float(inter_area / (box1_area + box2_area - inter_area))
+#%%
+'''Non-maximum Suppression'''
+idx = 7
+true_class, true_box = get_labels_from_xml(ann_files[idx])
+abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
+img_array = read_images(idx, idx+1)
+anchor_prob, anchor_box = RPNimported(tf.cast(img_array, tf.float32))
+anchor_prob = anchor_prob.numpy()[0][np.where(abool == 1.0)[1]]
+anchor_box = anchor_box.numpy()[0][np.where(abool == 1.0)[1]]
+anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
 
-# NMS = []
-# flag = np.zeros((len(anchor_prob), 1))
+NMS = []
+flag = np.zeros((len(anchor_prob), 1))
 
-# # initial
-# top_prob = np.max(anchor_prob[:, 0])
-# top_anchor = np.argmax(anchor_prob[:, 0])
-# NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
-# flag[top_anchor] = 1.0
+# initial
+top_prob = np.max(anchor_prob[:, 0])
+top_anchor = np.argmax(anchor_prob[:, 0])
+NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
+flag[top_anchor] = 1.0
 
-# while np.sum(flag) != len(flag):
+while np.sum(flag) != len(flag):
     
-#     iou_flag = 0
-#     # for i in range(len(anchor_prob)):
-#     #     if flag[i][0] == 1.0:
-#     #         continue
-#     for i in np.where(flag == 0.0)[0]:
-#         iou = compute_IoU(anchor_box[top_anchor], anchor_box[i], anchors_[top_anchor], anchors_[i])
-#         if iou >= 0.75:
-#             flag[i] = 1.0
-#             iou_flag = 1
+    iou_flag = 0
+    # for i in range(len(anchor_prob)):
+    #     if flag[i][0] == 1.0:
+    #         continue
+    for i in np.where(flag == 0.0)[0]:
+        iou = compute_IoU(anchor_box[top_anchor], anchor_box[i], anchors_[top_anchor], anchors_[i])
+        if iou >= 0.6:
+            flag[i] = 1.0
+            iou_flag = 1
     
-#     # top anchor이지만 일정 부분 이상 겹치는 다른 anchor가 존재하지 않는다면 정확하지 않은 예측이므로 삭제
-#     if iou_flag == 0:
-#         # NMS = NMS[:-1]
-#         break
+    # top anchor이지만 일정 부분 이상 겹치는 다른 anchor가 존재하지 않는다면 정확하지 않은 예측이므로 삭제
+    if iou_flag == 0:
+        # NMS = NMS[:-1]
+        break
     
-#     # update NMS
-#     top_prob = np.max(anchor_prob[:, 0])
-#     top_anchor = np.argmax(anchor_prob[np.where(flag == 0.0)[0], 0])
-#     NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
-#     flag[top_anchor] = 1.0
+    # update NMS
+    top_prob = np.max(anchor_prob[:, 0])
+    top_anchor = np.argmax(anchor_prob[np.where(flag == 0.0)[0], 0])
+    NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
+    flag[top_anchor] = 1.0
 
-# fig, ax = plt.subplots(figsize=(10, 10))
-# ax.imshow(img_array[0])
-# for s, j, box in NMS:
-#     x = box[0] * anchors_[j][2] + anchors_[j][0] 
-#     y = box[1] * anchors_[j][3] + anchors_[j][1] 
-#     w = math.exp(box[2]) * anchors_[j][2]
-#     h = math.exp(box[3]) * anchors_[j][3]
-#     rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=2, edgecolor='r', facecolor='none')
-#     ax.add_patch(rect)
-# for box in true_box:
-#     x = box[0]
-#     y = box[1]
-#     w = box[2] - box[0]
-#     h = box[3] - box[1]
-#     rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='orange', facecolor='none')
-#     ax.add_patch(rect)
-# plt.show()
-# plt.close()
+fig, ax = plt.subplots(figsize=(10, 10))
+ax.imshow(img_array[0])
+for s, j, box in NMS:
+    x = box[0] * anchors_[j][2] + anchors_[j][0] 
+    y = box[1] * anchors_[j][3] + anchors_[j][1] 
+    w = math.exp(box[2]) * anchors_[j][2]
+    h = math.exp(box[3]) * anchors_[j][3]
+    rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=2, edgecolor='r', facecolor='none')
+    ax.add_patch(rect)
+for box in true_box:
+    x = box[0]
+    y = box[1]
+    w = box[2] - box[0]
+    h = box[3] - box[1]
+    rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='orange', facecolor='none')
+    ax.add_patch(rect)
+plt.show()
+plt.close()
 #%%
