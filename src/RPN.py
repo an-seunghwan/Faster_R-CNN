@@ -467,7 +467,7 @@ sliding_window = conv_rpn(h) # 26x26x128
 
 conv_cls = K.layers.Conv2D(filters=18, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
 conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear',
-                           kernel_regularizer=K.regularizers.L1L2(l1=0, l2=1), bias_regularizer=K.regularizers.L1L2(l1=0, l2=1))
+                           kernel_regularizer=K.regularizers.L1L2(l1=0, l2=0.1), bias_regularizer=K.regularizers.L1L2(l1=0, l2=0.1))
 
 cls_output = conv_cls(sliding_window) # 26x26x18, logits
 reg_output = conv_reg(sliding_window) # 26x26x36
@@ -518,8 +518,8 @@ training parameters
 '''
 learning_rate = 0.0001
 epochs = 10
-batch_size = 50
-lambda_ = 500
+batch_size = 100
+lambda_ = 1000
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
