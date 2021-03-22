@@ -88,8 +88,8 @@ subsampling_ratio = 8 # (2, 2) Max Pooling 3 times -> 1/8 of original image
 anchor_sizes = [32, 64, 128]
 anchor_aspect_ratio = [[1, 1], [1/math.sqrt(2), math.sqrt(2)], [math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
-neg_threshold = 0.1
-pos_threshold = 0.5
+neg_threshold = 0.3
+pos_threshold = 0.6
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling 
 test_len = 100
 #%%
@@ -515,10 +515,10 @@ def loss_function(cls_pred, cls_true, reg_pred, reg_true):
 '''
 training parameters
 '''
-learning_rate = 0.0001
-epochs = 10
+learning_rate = 0.00005
+epochs = 20
 batch_size = 100
-lambda_ = 1000
+lambda_ = 100
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
@@ -615,7 +615,7 @@ def compute_IoU(box1, box2, anchor1, anchor2):
     return float(inter_area / (box1_area + box2_area - inter_area))
 #%%
 '''Non-maximum Suppression'''
-idx = 7
+idx = 5
 true_class, true_box = get_labels_from_xml(ann_files[idx])
 abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
 img_array = read_images(idx, idx+1)
