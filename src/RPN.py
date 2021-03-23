@@ -551,14 +551,14 @@ for epoch in range(epochs): # Each epoch.
 tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
 # tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN_model')
 #%%
-RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
+RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model_210323')
 # RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN_model')
 
 images = tf.cast(read_images(0, 1), tf.float32)
 assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
 assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
 #%%
-def compute_IoU(box1, box2, anchor1, anchor2):
+def compute_pred_IoU(box1, box2, anchor1, anchor2):
     x = box1[0] * anchor1[2] + anchor1[0] 
     y = box1[1] * anchor1[3] + anchor1[1] 
     w = tf.math.exp(box1[2]) * anchor1[2]
@@ -610,47 +610,53 @@ def compute_IoU(box1, box2, anchor1, anchor2):
 
     return float(inter_area / (box1_area + box2_area - inter_area))
 #%%
-'''Non-maximum Suppression'''
-# 예측한 값이 image boundary를 넘어갈 수 있음 (수정 필요)
-idx = 15
-true_class, true_box = get_labels_from_xml(ann_files[idx])
-abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
-img_array = read_images(idx, idx+1)
-anchor_prob, anchor_box = RPNimported(tf.cast(img_array, tf.float32))
-anchor_prob = anchor_prob.numpy()[0][np.where(abool == 1.0)[1]]
-anchor_box = anchor_box.numpy()[0][np.where(abool == 1.0)[1]]
-anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
+'''Non-maximum Suppression for just one image'''
+def Non_maximum_Suppression(idx):
+    img_array = read_images(idx, idx+1)
+    anchor_prob, anchor_box = RPNimported(tf.cast(img_array, tf.float32))
+    anchor_prob = anchor_prob.numpy()[0][np.where(abool == 1.0)[1]]
+    anchor_box = anchor_box.numpy()[0][np.where(abool == 1.0)[1]]
+    anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
 
-NMS = []
-flag = np.zeros((len(anchor_prob), 1))
+    NMS = []
+    flag = np.zeros((len(anchor_prob), 1))
 
-# initial
-top_prob = np.max(anchor_prob[:, 0])
-top_anchor = np.argmax(anchor_prob[:, 0])
-NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
-flag[top_anchor] = 1.0
-
-while int(np.sum(flag)) != len(flag):
-    
-    for i in np.where(flag == 0.0)[0]:
-        iou = compute_IoU(anchor_box[top_anchor], anchor_box[i], anchors_[top_anchor], anchors_[i])
-        if iou >= 0.1:
-            flag[i] = 1.0
-    
-    if int(np.sum(flag)) == len(flag): break
-        
-    top_prob = np.max(anchor_prob[np.where(flag == 0.0)[0], 0])
-    
-    if top_prob < 0.5: break # 더이상 좋은 confidence를 가지는 anchor가 없는 경우 stop
-    
-    # update NMS
-    idx = np.argmax(anchor_prob[np.where(flag == 0.0)[0], 0])
-    top_anchor = np.where(flag == 0.0)[0][idx]
+    # initial
+    top_prob = np.max(anchor_prob[:, 0])
+    top_anchor = np.argmax(anchor_prob[:, 0])
     NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
     flag[top_anchor] = 1.0
+
+    while int(np.sum(flag)) != len(flag):
+        
+        for i in np.where(flag == 0.0)[0]:
+            iou = compute_pred_IoU(anchor_box[top_anchor], anchor_box[i], anchors_[top_anchor], anchors_[i])
+            if iou >= 0.1:
+                flag[i] = 1.0
+        
+        if int(np.sum(flag)) == len(flag): break
+            
+        top_prob = np.max(anchor_prob[np.where(flag == 0.0)[0], 0])
+        
+        if top_prob < 0.5: break # 더이상 좋은 confidence를 가지는 anchor가 없는 경우 stop
+        
+        # update NMS
+        idx = np.argmax(anchor_prob[np.where(flag == 0.0)[0], 0])
+        top_anchor = np.where(flag == 0.0)[0][idx]
+        NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
+        flag[top_anchor] = 1.0
+    
+    return NMS, anchors_
+#%%
+# 예측한 값이 image boundary를 넘어갈 수 있음 (수정 필요)
+# one image example
+idx = 7
+true_class, true_box = get_labels_from_xml(ann_files[idx])
+abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
+NMS, anchors_ = Non_maximum_Suppression(idx)
     
 fig, ax = plt.subplots(figsize=(10, 10))
-ax.imshow(img_array[0])
+ax.imshow(read_images(idx, idx+1)[0])
 for s, j, box in NMS:
     x = box[0] * anchors_[j][2] + anchors_[j][0] 
     y = box[1] * anchors_[j][3] + anchors_[j][1] 
@@ -668,4 +674,33 @@ for box in true_box:
     ax.add_patch(rect)
 plt.show()
 plt.close()
+#%%
+# random image example
+fig, axs = plt.subplots(2, 4, figsize=(20, 10))
+for row in np.arange(2):
+    for col in np.arange(4):
+        idx = random.choice(range(train_len))
+        true_class, true_box = get_labels_from_xml(ann_files[idx])
+        abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
+        NMS, anchors_ = Non_maximum_Suppression(idx)
+        axs[row][col].imshow(read_images(idx, idx+1)[0])
+        for s, j, box in NMS:
+            x = box[0] * anchors_[j][2] + anchors_[j][0] 
+            y = box[1] * anchors_[j][3] + anchors_[j][1] 
+            w = tf.math.exp(box[2]) * anchors_[j][2]
+            h = tf.math.exp(box[3]) * anchors_[j][3]
+            rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=3, edgecolor='r', facecolor='none')
+            axs[row][col].add_patch(rect)
+            axs[row][col].text(x-w/2, y-h/2, s, fontsize=20, color='white')
+        for box in true_box:
+            x = box[0]
+            y = box[1]
+            w = box[2] - box[0]
+            h = box[3] - box[1]
+            rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='orange', facecolor='none')
+            axs[row][col].add_patch(rect)
+        axs[row][col].axis('off')
+fig.tight_layout()
+plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
+            dpi=300, bbox_inches="tight", pad_inches=0.1)
 #%%
