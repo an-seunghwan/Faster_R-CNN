@@ -40,44 +40,44 @@ ann_files = sorted(ann_files)
 img_files = sorted(img_files)
 
 # example
-# for f in ann_files[:3]:
+for f in ann_files[:3]:
 
-#     # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
-#     img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
-#     img_file = os.path.join(img_root, img_name)
-#     image = Image.open(img_file)
-#     print("Image size: ", np.array(image).shape)
-#     image = image.convert("RGB")
-#     draw = ImageDraw.Draw(image)
+    # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
+    img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
+    img_file = os.path.join(img_root, img_name)
+    image = Image.open(img_file)
+    print("Image size: ", np.array(image).shape)
+    image = image.convert("RGB")
+    draw = ImageDraw.Draw(image)
 
-#     xml = open(os.path.join(ann_root, f), "r")
-#     tree = Et.parse(xml)
-#     root = tree.getroot()
+    xml = open(os.path.join(ann_root, f), "r")
+    tree = Et.parse(xml)
+    root = tree.getroot()
 
-#     size = root.find("size")
+    size = root.find("size")
 
-#     width = size.find("width").text
-#     height = size.find("height").text
-#     channels = size.find("depth").text
+    width = size.find("width").text
+    height = size.find("height").text
+    channels = size.find("depth").text
 
-#     objects = root.findall("object")
+    objects = root.findall("object")
 
-#     for _object in objects:
-#         name = _object.find("name").text
-#         bndbox = _object.find("bndbox")
-#         xmin = int(bndbox.find("xmin").text)
-#         ymin = int(bndbox.find("ymin").text)
-#         xmax = int(bndbox.find("xmax").text)
-#         ymax = int(bndbox.find("ymax").text)
+    for _object in objects:
+        name = _object.find("name").text
+        bndbox = _object.find("bndbox")
+        xmin = int(bndbox.find("xmin").text)
+        ymin = int(bndbox.find("ymin").text)
+        xmax = int(bndbox.find("xmax").text)
+        ymax = int(bndbox.find("ymax").text)
 
-#         # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
-#         draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
-#         draw.text((xmin, ymin), name)
+        # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
+        draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
+        draw.text((xmin, ymin), name)
 
-#     plt.figure(figsize=(10,10))
-#     plt.imshow(image)
-#     plt.show()
-#     plt.close()
+    plt.figure(figsize=(10,10))
+    plt.imshow(image)
+    plt.show()
+    plt.close()
 #%%
 # parameters
 image_height = 224
@@ -465,6 +465,7 @@ h = conv3_pool(conv3(h)) # feature map, 28x28x64
 conv_rpn = K.layers.Conv2D(filters=128, kernel_size=3, strides=(1, 1), padding='VALID', activation='relu')
 sliding_window = conv_rpn(h) # 26x26x128
 
+# 1x1 size kernel = kernel weight can be shared across all spatial locations
 conv_cls = K.layers.Conv2D(filters=18, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
 conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
 
@@ -565,8 +566,8 @@ assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
 def compute_IoU(box1, box2, anchor1, anchor2):
     x = box1[0] * anchor1[2] + anchor1[0] 
     y = box1[1] * anchor1[3] + anchor1[1] 
-    w = math.exp(box1[2]) * anchor1[2]
-    h = math.exp(box1[3]) * anchor1[3]
+    w = tf.math.exp(box1[2]) * anchor1[2]
+    h = tf.math.exp(box1[3]) * anchor1[3]
     x1 = x - w/2
     x2 = x + w/2
     y1 = y - h/2
@@ -584,8 +585,8 @@ def compute_IoU(box1, box2, anchor1, anchor2):
     
     x = box2[0] * anchor2[2] + anchor2[0] 
     y = box2[1] * anchor2[3] + anchor2[1] 
-    w = math.exp(box2[2]) * anchor2[2]
-    h = math.exp(box2[3]) * anchor2[3]
+    w = tf.math.exp(box2[2]) * anchor2[2]
+    h = tf.math.exp(box2[3]) * anchor2[3]
     x1_ = x - w/2
     x2_ = x + w/2
     y1_ = y - h/2
@@ -615,7 +616,8 @@ def compute_IoU(box1, box2, anchor1, anchor2):
     return float(inter_area / (box1_area + box2_area - inter_area))
 #%%
 '''Non-maximum Suppression'''
-idx = 13
+# 예측한 값이 image boundary를 넘어갈 수 있음
+idx = 15
 true_class, true_box = get_labels_from_xml(ann_files[idx])
 abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
 img_array = read_images(idx, idx+1)
@@ -633,44 +635,42 @@ top_anchor = np.argmax(anchor_prob[:, 0])
 NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
 flag[top_anchor] = 1.0
 
-while np.sum(flag) != len(flag):
+while int(np.sum(flag)) != len(flag):
     
-    iou_flag = 0
-    # for i in range(len(anchor_prob)):
-    #     if flag[i][0] == 1.0:
-    #         continue
     for i in np.where(flag == 0.0)[0]:
         iou = compute_IoU(anchor_box[top_anchor], anchor_box[i], anchors_[top_anchor], anchors_[i])
-        if iou >= 0.6:
+        if iou >= 0.1:
             flag[i] = 1.0
-            iou_flag = 1
     
-    # top anchor이지만 일정 부분 이상 겹치는 다른 anchor가 존재하지 않는다면 정확하지 않은 예측이므로 삭제
-    if iou_flag == 0:
-        # NMS = NMS[:-1]
-        break
-    
+    if int(np.sum(flag)) == len(flag): break
+        
     # update NMS
-    top_prob = np.max(anchor_prob[:, 0])
-    top_anchor = np.argmax(anchor_prob[np.where(flag == 0.0)[0], 0])
+    top_prob = np.max(anchor_prob[np.where(flag == 0.0)[0], 0])
+    
+    if top_prob < 0.5: break # 더이상 좋은 confidence를 가지는 anchor가 없는 경우
+    
+    idx = np.argmax(anchor_prob[np.where(flag == 0.0)[0], 0])
+    top_anchor = np.where(flag == 0.0)[0][idx]
     NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
     flag[top_anchor] = 1.0
-
+    
 fig, ax = plt.subplots(figsize=(10, 10))
 ax.imshow(img_array[0])
 for s, j, box in NMS:
     x = box[0] * anchors_[j][2] + anchors_[j][0] 
     y = box[1] * anchors_[j][3] + anchors_[j][1] 
-    w = math.exp(box[2]) * anchors_[j][2]
-    h = math.exp(box[3]) * anchors_[j][3]
-    rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=2, edgecolor='r', facecolor='none')
+    w = tf.math.exp(box[2]) * anchors_[j][2]
+    h = tf.math.exp(box[3]) * anchors_[j][3]
+    rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=3, edgecolor='r', facecolor='none')
     ax.add_patch(rect)
+    ax.text(x-w/2, y-h/2, s, fontsize=20, color='white')
+
 for box in true_box:
     x = box[0]
     y = box[1]
     w = box[2] - box[0]
     h = box[3] - box[1]
-    rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='orange', facecolor='none')
+    rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='orange', facecolor='none')
     ax.add_patch(rect)
 plt.show()
 plt.close()
