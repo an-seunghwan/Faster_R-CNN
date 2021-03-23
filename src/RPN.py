@@ -40,44 +40,44 @@ ann_files = sorted(ann_files)
 img_files = sorted(img_files)
 
 # example
-for f in ann_files[:3]:
+# for f in ann_files[:3]:
 
-    # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
-    img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
-    img_file = os.path.join(img_root, img_name)
-    image = Image.open(img_file)
-    print("Image size: ", np.array(image).shape)
-    image = image.convert("RGB")
-    draw = ImageDraw.Draw(image)
+#     # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
+#     img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
+#     img_file = os.path.join(img_root, img_name)
+#     image = Image.open(img_file)
+#     print("Image size: ", np.array(image).shape)
+#     image = image.convert("RGB")
+#     draw = ImageDraw.Draw(image)
 
-    xml = open(os.path.join(ann_root, f), "r")
-    tree = Et.parse(xml)
-    root = tree.getroot()
+#     xml = open(os.path.join(ann_root, f), "r")
+#     tree = Et.parse(xml)
+#     root = tree.getroot()
 
-    size = root.find("size")
+#     size = root.find("size")
 
-    width = size.find("width").text
-    height = size.find("height").text
-    channels = size.find("depth").text
+#     width = size.find("width").text
+#     height = size.find("height").text
+#     channels = size.find("depth").text
 
-    objects = root.findall("object")
+#     objects = root.findall("object")
 
-    for _object in objects:
-        name = _object.find("name").text
-        bndbox = _object.find("bndbox")
-        xmin = int(bndbox.find("xmin").text)
-        ymin = int(bndbox.find("ymin").text)
-        xmax = int(bndbox.find("xmax").text)
-        ymax = int(bndbox.find("ymax").text)
+#     for _object in objects:
+#         name = _object.find("name").text
+#         bndbox = _object.find("bndbox")
+#         xmin = int(bndbox.find("xmin").text)
+#         ymin = int(bndbox.find("ymin").text)
+#         xmax = int(bndbox.find("xmax").text)
+#         ymax = int(bndbox.find("ymax").text)
 
-        # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
-        draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
-        draw.text((xmin, ymin), name)
+#         # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
+#         draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
+#         draw.text((xmin, ymin), name)
 
-    plt.figure(figsize=(10,10))
-    plt.imshow(image)
-    plt.show()
-    plt.close()
+#     plt.figure(figsize=(10,10))
+#     plt.imshow(image)
+#     plt.show()
+#     plt.close()
 #%%
 # parameters
 image_height = 224
@@ -514,7 +514,7 @@ training parameters
 learning_rate = 0.00005
 epochs = 20
 batch_size = 100
-lambda_ = 100
+lambda_ = 500
 
 optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
