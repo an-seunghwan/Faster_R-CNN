@@ -84,12 +84,13 @@ image_height = 224
 image_width  = 224
 image_depth  = 3 # RGB
 RPN_kernel_size = 3 # 3x3
-subsampling_ratio = 8 # (2, 2) Max Pooling 3 times -> 1/8 of original image
+'''(2, 2) Max Pooling 3 times -> 1/8 of original image'''
+subsampling_ratio = 8 
 anchor_sizes = [32, 64, 128]
 anchor_aspect_ratio = [[1, 1], [1/math.sqrt(2), math.sqrt(2)], [math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
 neg_threshold = 0.3
-pos_threshold = 0.6
+pos_threshold = 0.62
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling 
 test_len = 100
 #%%
@@ -98,9 +99,7 @@ Input : dataset's annotations
 Output : class label
 '''
 classes = []
-
 for f in ann_files: 
-
     xml = open(os.path.join(ann_root, f), "r")
     tree = Et.parse(xml)
     root = tree.getroot()
@@ -177,8 +176,10 @@ def generate_anchors(RPN_kernel_size=RPN_kernel_size,
     starting_center = divmod(RPN_kernel_size, 2)[0] # 3x3 kernel이므로 가장 왼쪽 위를 기준으로 (1, 1) 지점이 kernel의 center
     anchor_center = [starting_center - 1, starting_center] # -1 on the x-coor because the increment comes first in the while loop
     
-    # original image가 1/8로 축소된 경우의 image size 
-    # : feature map of sliding window = center points of anchors
+    '''
+    original image가 1/8로 축소된 경우의 image size 
+    : feature map pixel = center points of anchors (sliding windows)
+    '''
     subsampled_height = image_height / subsampling_ratio # = 28
     subsampled_width = image_width / subsampling_ratio # = 28
     
@@ -216,12 +217,10 @@ def generate_anchors(RPN_kernel_size=RPN_kernel_size,
 
 # anchors, anchor_booleans = generate_anchors()
 
-# object center
-
+# # example of reference anchors
 # ex_img = np.zeros((image_width, image_height))
 # fig, ax = plt.subplots()
 # ax.imshow(ex_img)
-# # for box, b in zip(anchors[8*100:8*101], anchor_booleans[8*100:8*101]):
 # for box, b in zip(anchors[8*334:8*335], anchor_booleans[8*334:8*335]):
 # # for box, b in zip(anchors, anchor_booleans):
 #     if b == [1.0]:
@@ -250,7 +249,6 @@ def generate_labels(class_label,
     '''
 
     num_anchors = len(anchors) # Get the total number of anchors.
-    # updated anchor booleans
     anchor_booleans = np.reshape(np.asarray(anchor_booleans), (num_anchors, 1)) 
     anchor_booleans_ = deepcopy(anchor_booleans)
     
@@ -277,10 +275,11 @@ def generate_labels(class_label,
             '''Compute IoU'''
             # Check if the anchor should be ignored or not. 
             # If it is to be ignored, it crosses boundary of image.
+            
             if int(anchor_booleans[i][0]) == 0:
                 continue
 
-            anchor = anchors[i] # Select the i-th anchor [x, y, w, h]
+            anchor = anchors[i] 
 
             # anchors are in [x,y,w,h] format, convert them to the [top-left-x, top-left-y, btm-right-x, btm-right-y]
             anchor_top_left_x = anchor[0] - anchor[2]/2
@@ -360,7 +359,7 @@ def anchor_sampling(anchor_booleans,
             if positive_count > anchor_sampling_amount: 
                 anchor_booleans[i][0] = 0.0
     
-    # positive의 부족한 개수는 negative가 채움
+    '''positive의 부족한 개수는 negative가 채움'''
     minus_positive_count = anchor_sampling_amount - positive_count
     
     for i in range(objectness.shape[0]):
@@ -375,7 +374,7 @@ def anchor_sampling(anchor_booleans,
 # anchors, anchor_booleans = generate_anchors()
 # i = 0
 # class_label, bbox_label = get_labels_from_xml(ann_files[i])
-# anchor_booleans, objectness, box_regression, anchor_class = generate_proposals(class_label, bbox_label, anchors, anchor_booleans)
+# anchor_booleans, objectness, box_regression, anchor_class = generate_labels(class_label, bbox_label, anchors, anchor_booleans)
 # anchor_booleans = anchor_sampling(anchor_booleans, objectness)
 # np.sum(objectness, axis=0)
 # np.sum(objectness[np.where(anchor_booleans == 1.0)[0]], axis=0)
@@ -407,11 +406,6 @@ def generate_dataset(first_index, last_index, anchors, anchor_booleans):
             batch_objectness.append(objectness)
             batch_regression.append(box_regression)
             batch_anchor_class.append(anchor_class)
-
-        # batch_anchor_booleans = tf.reshape(tf.cast(batch_anchor_booleans, tf.float32), (-1, num_anchors)) # (1, 6084, 1) -> (1, 6084)
-        # batch_objectness = tf.cast(batch_objectness, tf.float32)
-        # batch_regression = tf.cast(batch_regression, tf.float32)
-        # batch_anchor_class = tf.cast(batch_anchor_class, tf.float32)
         
         batch_anchor_booleans = np.reshape(np.asarray(batch_anchor_booleans), (-1, num_anchors)) # (1, 6084, 1) -> (1, 6084)
         batch_objectness = np.asarray(batch_objectness)
@@ -419,7 +413,7 @@ def generate_dataset(first_index, last_index, anchors, anchor_booleans):
         batch_anchor_class = np.asarray(batch_anchor_class)
 
         return (batch_anchor_booleans, batch_objectness, batch_regression, batch_anchor_class)
-#%%
+
 # a,b,c,d = generate_dataset(0, 1, anchors, anchor_booleans)
 # a.shape
 # b.shape
@@ -460,12 +454,13 @@ h = conv2_pool(conv2(h))
 
 conv3 = K.layers.Conv2D(filters=64, kernel_size=3, strides=(1, 1), padding='SAME', activation='relu')
 conv3_pool = K.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='SAME')
-h = conv3_pool(conv3(h)) # feature map, 28x28x64
+'''feature map, 28x28x64 (center of sliding windows)'''
+h = conv3_pool(conv3(h)) 
 
 conv_rpn = K.layers.Conv2D(filters=128, kernel_size=3, strides=(1, 1), padding='VALID', activation='relu')
 sliding_window = conv_rpn(h) # 26x26x128
 
-# 1x1 size kernel = kernel weight can be shared across all spatial locations
+'''1x1 size kernel = kernel weight can be shared across all spatial locations'''
 conv_cls = K.layers.Conv2D(filters=18, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
 conv_reg = K.layers.Conv2D(filters=36, kernel_size=1, strides=(1, 1), padding='VALID', activation='linear')
 
@@ -492,21 +487,21 @@ plt.plot(diff, tf.where(tf.math.abs(diff) < 1, 0.5 * tf.math.pow(diff, 2), tf.ma
 # plt.show()
 plt.close()
 
-# cls_pred, cls_true, reg_pred, reg_true = cls_result, batch_objectness, reg_result, batch_regression
-
 def loss_function(cls_pred, cls_true, reg_pred, reg_true):
-    # objective가 아니라, anchor boolean이 training의 기준
-    # 왜냐하면, object가 존재하지 않더라도 object가 존재하지 않는다는 binary classification을 학습해야하기 때문
-    # 따라서, anchor의 사용 가능만을 이용해 loss를 계산
-    # cls_loss = tf.reduce_sum(tf.multiply(batch_anchor_booleans, 
-    #                                     tf.nn.softmax_cross_entropy_with_logits(cls_pred, cls_true)))
+    '''
+    objective가 아니라, anchor boolean이 training의 기준
+    왜냐하면, object가 존재하지 않더라도 object가 존재하지 않는다는 binary classification을 학습해야하기 때문
+    따라서, anchor의 사용 가능 여부만을 이용해 loss를 계산
+    '''
     cls_loss = tf.reduce_sum(tf.multiply(batch_anchor_booleans,
                                         tf.reduce_sum(tf.multiply(cls_true, - tf.math.log(cls_pred + 1e-20)), axis=-1)))
     # normalizing: batch_size x (the number of positive and negative anchors)
     cls_loss /= batch_size * (anchor_sampling_amount * 2) 
 
-    # positive objective만을 이용해 training
-    # 왜냐하면, box regression에는 실제로 object가 존재하는 경우에만 값이 존재
+    '''
+    positive objective만을 이용해 training
+    왜냐하면, box regression은 실제로 object가 존재하는 경우에만 유효
+    '''
     reg_loss = tf.reduce_mean(tf.multiply(cls_true[..., 0],  
                                         tf.reduce_sum(smooth_L1(reg_pred, reg_true), axis=-1))) # anchor 개수를 이용해 normalizing
 
@@ -616,7 +611,7 @@ def compute_IoU(box1, box2, anchor1, anchor2):
     return float(inter_area / (box1_area + box2_area - inter_area))
 #%%
 '''Non-maximum Suppression'''
-# 예측한 값이 image boundary를 넘어갈 수 있음
+# 예측한 값이 image boundary를 넘어갈 수 있음 (수정 필요)
 idx = 15
 true_class, true_box = get_labels_from_xml(ann_files[idx])
 abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
@@ -644,11 +639,11 @@ while int(np.sum(flag)) != len(flag):
     
     if int(np.sum(flag)) == len(flag): break
         
-    # update NMS
     top_prob = np.max(anchor_prob[np.where(flag == 0.0)[0], 0])
     
-    if top_prob < 0.5: break # 더이상 좋은 confidence를 가지는 anchor가 없는 경우
+    if top_prob < 0.5: break # 더이상 좋은 confidence를 가지는 anchor가 없는 경우 stop
     
+    # update NMS
     idx = np.argmax(anchor_prob[np.where(flag == 0.0)[0], 0])
     top_anchor = np.where(flag == 0.0)[0][idx]
     NMS.append((top_prob, top_anchor, anchor_box[top_anchor]))
@@ -664,7 +659,6 @@ for s, j, box in NMS:
     rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=3, edgecolor='r', facecolor='none')
     ax.add_patch(rect)
     ax.text(x-w/2, y-h/2, s, fontsize=20, color='white')
-
 for box in true_box:
     x = box[0]
     y = box[1]
