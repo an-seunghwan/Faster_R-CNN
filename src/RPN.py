@@ -615,7 +615,7 @@ def compute_IoU(box1, box2, anchor1, anchor2):
     return float(inter_area / (box1_area + box2_area - inter_area))
 #%%
 '''Non-maximum Suppression'''
-idx = 5
+idx = 13
 true_class, true_box = get_labels_from_xml(ann_files[idx])
 abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
 img_array = read_images(idx, idx+1)
