@@ -89,8 +89,8 @@ subsampling_ratio = 8
 anchor_sizes = [32, 64, 128]
 anchor_aspect_ratio = [[1, 1], [1/math.sqrt(2), math.sqrt(2)], [math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
-neg_threshold = 0.3
-pos_threshold = 0.62
+neg_threshold = 0.2
+pos_threshold = 0.61
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling 
 test_len = 100
 #%%
@@ -551,7 +551,7 @@ for epoch in range(epochs): # Each epoch.
 tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
 # tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN_model')
 #%%
-RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model_210323')
+RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
 # RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN_model')
 
 images = tf.cast(read_images(0, 1), tf.float32)
@@ -701,6 +701,7 @@ for row in np.arange(2):
             axs[row][col].add_patch(rect)
         axs[row][col].axis('off')
 fig.tight_layout()
-plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
-            dpi=300, bbox_inches="tight", pad_inches=0.1)
+# plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
+#             dpi=300, bbox_inches="tight", pad_inches=0.1)
+# plt.close()
 #%%
