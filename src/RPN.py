@@ -701,7 +701,7 @@ for row in np.arange(2):
             axs[row][col].add_patch(rect)
         axs[row][col].axis('off')
 fig.tight_layout()
-# plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
-#             dpi=300, bbox_inches="tight", pad_inches=0.1)
+plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
+            dpi=300, bbox_inches="tight", pad_inches=0.1)
 # plt.close()
 #%%
