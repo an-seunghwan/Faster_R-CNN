@@ -672,7 +672,7 @@ for box in true_box:
     h = box[3] - box[1]
     rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='orange', facecolor='none')
     ax.add_patch(rect)
-plt.show()
+# plt.show()
 plt.close()
 #%%
 # random image example
@@ -701,7 +701,7 @@ for row in np.arange(2):
             axs[row][col].add_patch(rect)
         axs[row][col].axis('off')
 fig.tight_layout()
-plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
-            dpi=300, bbox_inches="tight", pad_inches=0.1)
-# plt.close()
+# plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
+            # dpi=300, bbox_inches="tight", pad_inches=0.1)
+plt.close()
 #%%
