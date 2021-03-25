@@ -89,8 +89,8 @@ subsampling_ratio = 8
 anchor_sizes = [32, 64, 128]
 anchor_aspect_ratio = [[1, 1], [1/math.sqrt(2), math.sqrt(2)], [math.sqrt(2), 1/math.sqrt(2)]]
 num_per_anchors = len(anchor_sizes) * len(anchor_aspect_ratio)
-neg_threshold = 0.2
-pos_threshold = 0.61
+neg_threshold = 0.25 # 0.2
+pos_threshold = 0.61 # 0.61
 anchor_sampling_amount = 128 # 128 for each positive, negative sampling 
 test_len = 100
 #%%
@@ -675,11 +675,11 @@ for box in true_box:
 # plt.show()
 plt.close()
 #%%
-# random image example
+# random image example for test dataset
 fig, axs = plt.subplots(2, 4, figsize=(20, 10))
 for row in np.arange(2):
     for col in np.arange(4):
-        idx = random.choice(range(train_len))
+        idx = random.choice(range(test_len)) + train_len
         true_class, true_box = get_labels_from_xml(ann_files[idx])
         abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
         NMS, anchors_ = Non_maximum_Suppression(idx)
@@ -701,7 +701,7 @@ for row in np.arange(2):
             axs[row][col].add_patch(rect)
         axs[row][col].axis('off')
 fig.tight_layout()
-# plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
-            # dpi=300, bbox_inches="tight", pad_inches=0.1)
-plt.close()
+plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
+            dpi=300, bbox_inches="tight", pad_inches=0.1)
+# plt.close()
 #%%
