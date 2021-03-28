@@ -547,16 +547,18 @@ for epoch in range(epochs): # Each epoch.
         optimizer.apply_gradients(zip(grad, RPNmodel.weights))
         
         print('RPN Epoch:', epoch, ', loss:', loss.numpy(), ', CLS loss:', cls_loss.numpy(), ', REG loss:', reg_loss.numpy())
-        
+
+'''tf file 형식으로 모형을 저장'''
 tf.saved_model.save(RPNmodel, '/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
 # tf.saved_model.save(RPNmodel, r'D:\Faster_R-CNN\result\RPN_model')
 #%%
 RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_model')
 # RPNimported = tf.saved_model.load(r'D:\Faster_R-CNN\result\RPN_model')
 
-images = tf.cast(read_images(0, 1), tf.float32)
-assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
-assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
+# save & load 확인용
+# images = tf.cast(read_images(0, 1), tf.float32)
+# assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
+# assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
 #%%
 def compute_pred_IoU(box1, box2, anchor1, anchor2):
     x = box1[0] * anchor1[2] + anchor1[0] 
@@ -672,7 +674,7 @@ for box in true_box:
     h = box[3] - box[1]
     rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='orange', facecolor='none')
     ax.add_patch(rect)
-# plt.show()
+plt.show()
 plt.close()
 #%%
 # random image example for test dataset
@@ -701,7 +703,8 @@ for row in np.arange(2):
             axs[row][col].add_patch(rect)
         axs[row][col].axis('off')
 fig.tight_layout()
-plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
-            dpi=300, bbox_inches="tight", pad_inches=0.1)
-# plt.close()
+# plt.savefig('/Users/anseunghwan/Documents/GitHub/Faster_R-CNN/result/RPN_result.png', 
+#             dpi=300, bbox_inches="tight", pad_inches=0.1)
+plt.show()
+plt.close()
 #%%
