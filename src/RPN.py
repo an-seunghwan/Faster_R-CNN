@@ -40,44 +40,44 @@ ann_files = sorted(ann_files)
 img_files = sorted(img_files)
 
 # example
-# for f in ann_files[:3]:
+for f in ann_files[:3]:
 
-#     # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
-#     img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
-#     img_file = os.path.join(img_root, img_name)
-#     image = Image.open(img_file)
-#     print("Image size: ", np.array(image).shape)
-#     image = image.convert("RGB")
-#     draw = ImageDraw.Draw(image)
+    # XML파일와 이미지파일은 이름이 같으므로, 확장자만 맞춰서 찾습니다.
+    img_name = img_files[img_files.index(".".join([f.split(".")[0], "jpg"]))]
+    img_file = os.path.join(img_root, img_name)
+    image = Image.open(img_file)
+    print("Image size: ", np.array(image).shape)
+    image = image.convert("RGB")
+    draw = ImageDraw.Draw(image)
 
-#     xml = open(os.path.join(ann_root, f), "r")
-#     tree = Et.parse(xml)
-#     root = tree.getroot()
+    xml = open(os.path.join(ann_root, f), "r")
+    tree = Et.parse(xml)
+    root = tree.getroot()
 
-#     size = root.find("size")
+    size = root.find("size")
 
-#     width = size.find("width").text
-#     height = size.find("height").text
-#     channels = size.find("depth").text
+    width = size.find("width").text
+    height = size.find("height").text
+    channels = size.find("depth").text
 
-#     objects = root.findall("object")
+    objects = root.findall("object")
 
-#     for _object in objects:
-#         name = _object.find("name").text
-#         bndbox = _object.find("bndbox")
-#         xmin = int(bndbox.find("xmin").text)
-#         ymin = int(bndbox.find("ymin").text)
-#         xmax = int(bndbox.find("xmax").text)
-#         ymax = int(bndbox.find("ymax").text)
+    for _object in objects:
+        name = _object.find("name").text
+        bndbox = _object.find("bndbox")
+        xmin = int(bndbox.find("xmin").text)
+        ymin = int(bndbox.find("ymin").text)
+        xmax = int(bndbox.find("xmax").text)
+        ymax = int(bndbox.find("ymax").text)
 
-#         # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
-#         draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
-#         draw.text((xmin, ymin), name)
+        # Box를 그릴 때, 왼쪽 상단 점과, 오른쪽 하단 점의 좌표를 입력으로 주면 됩니다.
+        draw.rectangle(((xmin, ymin), (xmax, ymax)), outline="red")
+        draw.text((xmin, ymin), name)
 
-#     plt.figure(figsize=(10,10))
-#     plt.imshow(image)
-#     plt.show()
-#     plt.close()
+    plt.figure(figsize=(10,10))
+    plt.imshow(image)
+    plt.show()
+    plt.close()
 #%%
 # parameters
 image_height = 224
@@ -111,6 +111,7 @@ classes = list(set(classes))
 classes.sort()
 classdict = {c:i for i,c in enumerate(classes)}
 numclass = len(classes)
+classdict
 #%%
 def get_labels_from_xml(xml_file):
     '''
@@ -154,9 +155,9 @@ def get_labels_from_xml(xml_file):
 
     return class_label, np.asarray(bbox_label)
 
-# class_label, bbox_label = get_labels_from_xml(ann_files[0])
-# print(class_label)
-# print(bbox_label)
+class_label, bbox_label = get_labels_from_xml(ann_files[0])
+print(class_label)
+print(bbox_label)
 #%%
 def generate_anchors(RPN_kernel_size=RPN_kernel_size, 
                      subsampling_ratio=subsampling_ratio,
@@ -215,22 +216,22 @@ def generate_anchors(RPN_kernel_size=RPN_kernel_size,
     
     return anchors, anchor_booleans
 
-# anchors, anchor_booleans = generate_anchors()
+anchors, anchor_booleans = generate_anchors()
 
-# # example of reference anchors
-# ex_img = np.zeros((image_width, image_height))
-# fig, ax = plt.subplots()
-# ax.imshow(ex_img)
-# for box, b in zip(anchors[8*334:8*335], anchor_booleans[8*334:8*335]):
-# # for box, b in zip(anchors, anchor_booleans):
-#     if b == [1.0]:
-#         x = box[0] - box[2]/2
-#         y = box[1] - box[3]/2
-#         _, _, w, h = box
-#         rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
-#         ax.add_patch(rect)
-# plt.show()
-# plt.close()
+# example of reference anchors
+ex_img = np.zeros((image_width, image_height))
+fig, ax = plt.subplots()
+ax.imshow(ex_img)
+for box, b in zip(anchors[8*334:8*335], anchor_booleans[8*334:8*335]):
+# for box, b in zip(anchors, anchor_booleans):
+    if b == [1.0]:
+        x = box[0] - box[2]/2
+        y = box[1] - box[3]/2
+        _, _, w, h = box
+        rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
+        ax.add_patch(rect)
+plt.show()
+plt.close()
 #%%
 def generate_labels(class_label, 
                         ground_truth_boxes, 
@@ -371,13 +372,13 @@ def anchor_sampling(anchor_booleans,
     
     return anchor_booleans
 
-# anchors, anchor_booleans = generate_anchors()
-# i = 0
-# class_label, bbox_label = get_labels_from_xml(ann_files[i])
-# anchor_booleans, objectness, box_regression, anchor_class = generate_labels(class_label, bbox_label, anchors, anchor_booleans)
-# anchor_booleans = anchor_sampling(anchor_booleans, objectness)
-# np.sum(objectness, axis=0)
-# np.sum(objectness[np.where(anchor_booleans == 1.0)[0]], axis=0)
+anchors, anchor_booleans = generate_anchors()
+i = 0
+class_label, bbox_label = get_labels_from_xml(ann_files[i])
+anchor_booleans, objectness, box_regression, anchor_class = generate_labels(class_label, bbox_label, anchors, anchor_booleans)
+anchor_booleans = anchor_sampling(anchor_booleans, objectness)
+np.sum(objectness, axis=0)
+np.sum(objectness[np.where(anchor_booleans == 1.0)[0]], axis=0)
 #%%
 def generate_dataset(first_index, last_index, anchors, anchor_booleans):
         '''
@@ -414,11 +415,11 @@ def generate_dataset(first_index, last_index, anchors, anchor_booleans):
 
         return (batch_anchor_booleans, batch_objectness, batch_regression, batch_anchor_class)
 
-# a,b,c,d = generate_dataset(0, 1, anchors, anchor_booleans)
-# a.shape
-# b.shape
-# c.shape
-# d.shape
+a,b,c,d = generate_dataset(0, 1, anchors, anchor_booleans)
+a.shape
+b.shape
+c.shape
+d.shape
 #%%
 def read_images(first_index, last_index):
     '''
@@ -484,7 +485,7 @@ def smooth_L1(reg_pred, reg_true):
 
 diff = np.linspace(-2, 2, 100)
 plt.plot(diff, tf.where(tf.math.abs(diff) < 1, 0.5 * tf.math.pow(diff, 2), tf.math.abs(diff)-0.5))
-# plt.show()
+plt.show()
 plt.close()
 
 def loss_function(cls_pred, cls_true, reg_pred, reg_true):
@@ -559,6 +560,40 @@ RPNimported = tf.saved_model.load('/Users/anseunghwan/Documents/GitHub/Faster_R-
 # images = tf.cast(read_images(0, 1), tf.float32)
 # assert tf.reduce_sum(RPNmodel(images)[0] - RPNimported(images)[0]) == 0
 # assert tf.reduce_sum(RPNmodel(images)[1] - RPNimported(images)[1]) == 0
+#%%
+'''Before Non-maximum Suppression'''
+idx = 7
+true_class, true_box = get_labels_from_xml(ann_files[idx])
+abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
+img_array = read_images(idx, idx+1)
+anchor_prob, anchor_box = RPNimported(tf.cast(img_array, tf.float32))
+anchor_prob = anchor_prob.numpy()[0][np.where(abool == 1.0)[1]]
+anchor_box = anchor_box.numpy()[0][np.where(abool == 1.0)[1]]
+anchors_ = [anchors[i] for i in np.where(abool == 1.0)[1]]
+
+topk = 10
+topk_idx = np.argsort(anchor_prob[:, 0])[-topk:]
+topk_anchors = anchor_box[topk_idx]
+
+fig, ax = plt.subplots(figsize=(10, 10))
+ax.imshow(read_images(idx, idx+1)[0])
+for j, box in zip(topk_idx, topk_anchors):
+    x = box[0] * anchors_[j][2] + anchors_[j][0] 
+    y = box[1] * anchors_[j][3] + anchors_[j][1] 
+    w = tf.math.exp(box[2]) * anchors_[j][2]
+    h = tf.math.exp(box[3]) * anchors_[j][3]
+    rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=3, edgecolor='r', facecolor='none')
+    ax.add_patch(rect)
+    ax.text(x-w/2, y-h/2, s, fontsize=20, color='white')
+for box in true_box:
+    x = box[0]
+    y = box[1]
+    w = box[2] - box[0]
+    h = box[3] - box[1]
+    rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='orange', facecolor='none')
+    ax.add_patch(rect)
+plt.show()
+plt.close()
 #%%
 def compute_pred_IoU(box1, box2, anchor1, anchor2):
     x = box1[0] * anchor1[2] + anchor1[0] 
@@ -686,14 +721,14 @@ for row in np.arange(2):
         abool, obj, reg, cls_ = generate_dataset(idx, idx+1, anchors, anchor_booleans)
         NMS, anchors_ = Non_maximum_Suppression(idx)
         axs[row][col].imshow(read_images(idx, idx+1)[0])
-        for s, j, box in NMS:
+        for p, j, box in NMS:
             x = box[0] * anchors_[j][2] + anchors_[j][0] 
             y = box[1] * anchors_[j][3] + anchors_[j][1] 
             w = tf.math.exp(box[2]) * anchors_[j][2]
             h = tf.math.exp(box[3]) * anchors_[j][3]
             rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=3, edgecolor='r', facecolor='none')
             axs[row][col].add_patch(rect)
-            axs[row][col].text(x-w/2, y-h/2, s, fontsize=20, color='white')
+            axs[row][col].text(x-w/2, y-h/2, p, fontsize=20, color='white')
         for box in true_box:
             x = box[0]
             y = box[1]
