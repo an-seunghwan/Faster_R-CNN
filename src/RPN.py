@@ -415,7 +415,7 @@ def generate_dataset(first_index, last_index, anchors, anchor_booleans):
 
         return (batch_anchor_booleans, batch_objectness, batch_regression, batch_anchor_class)
 
-a,b,c,d = generate_dataset(0, 1, anchors, anchor_booleans)
+a,b,c,d = generate_dataset(0, 10, anchors, anchor_booleans)
 a.shape
 b.shape
 c.shape
@@ -584,7 +584,6 @@ for j, box in zip(topk_idx, topk_anchors):
     h = tf.math.exp(box[3]) * anchors_[j][3]
     rect = patches.Rectangle((x-w/2, y-h/2), w, h, linewidth=3, edgecolor='r', facecolor='none')
     ax.add_patch(rect)
-    ax.text(x-w/2, y-h/2, s, fontsize=20, color='white')
 for box in true_box:
     x = box[0]
     y = box[1]
